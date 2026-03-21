@@ -1,28 +1,14 @@
 #include <pebble.h>
 
 static Window *    s_window;
-static TextLayer * s_text_layer;
+static TextLayer * s_time_layer;
 
-static void prv_select_click_handler(ClickRecognizerRef const recognizer, void * const context)
+static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed)
 {
-	text_layer_set_text(s_text_layer, "Select");
-}
+	static char s_time_buffer[16];
 
-static void prv_up_click_handler(ClickRecognizerRef const recognizer, void * const context)
-{
-	text_layer_set_text(s_text_layer, "Up");
-}
-
-static void prv_down_click_handler(ClickRecognizerRef const recognizer, void * const context)
-{
-	text_layer_set_text(s_text_layer, "Down");
-}
-
-static void prv_click_config_provider(void * const context)
-{
-	window_single_click_subscribe(BUTTON_ID_SELECT, prv_select_click_handler);
-	window_single_click_subscribe(BUTTON_ID_UP, prv_up_click_handler);
-	window_single_click_subscribe(BUTTON_ID_DOWN, prv_down_click_handler);
+	strftime(s_time_buffer, sizeof(s_time_buffer), clock_is_24h_style() ? "%H:%M:%S" : "%I:%M:%S", tick_time);
+	text_layer_set_text(s_time_layer, s_time_buffer);
 }
 
 static void prv_window_load(Window * const window)
@@ -30,21 +16,30 @@ static void prv_window_load(Window * const window)
 	Layer * const window_layer = window_get_root_layer(window);
 	const GRect bounds         = layer_get_bounds(window_layer);
 
-	s_text_layer = text_layer_create(GRect(0, 72, bounds.size.w, 20));
-	text_layer_set_text(s_text_layer, "Press a button");
-	text_layer_set_text_alignment(s_text_layer, GTextAlignmentCenter);
-	layer_add_child(window_layer, text_layer_get_layer(s_text_layer));
+	s_time_layer = text_layer_create(GRect(0, 72, bounds.size.w, 20));
+	text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
+	layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
+
+	// Get a tm structure
+	time_t temp = time(NULL);
+	struct tm *tick_time = localtime(&temp);
+
+	// Display time immediately
+	prv_tick_handler(tick_time, SECOND_UNIT);
+
+	// Subscribe to tick timer service
+	tick_timer_service_subscribe(SECOND_UNIT, prv_tick_handler);
 }
 
 static void prv_window_unload(Window * const window)
 {
-	text_layer_destroy(s_text_layer);
+	text_layer_destroy(s_time_layer);
+	tick_timer_service_unsubscribe();
 }
 
 static void prv_init(void)
 {
 	s_window = window_create();
-	window_set_click_config_provider(s_window, prv_click_config_provider);
 	window_set_window_handlers(s_window, (WindowHandlers) {
 	                                         .load   = prv_window_load,
 	                                         .unload = prv_window_unload,
