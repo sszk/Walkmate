@@ -1,38 +1,98 @@
 #include <pebble.h>
 
 static Window *    s_window;
+static TextLayer * s_date_layer;
 static TextLayer * s_time_layer;
 
-static void prv_tick_handler(struct tm *tick_time, TimeUnits units_changed)
-{
-	static char s_time_buffer[16];
+static const char month[12][4] = {
+	"Jan",
+	"Feb",
+	"Mar",
+	"Apr",
+	"May",
+	"Jun",
+	"Jul",
+	"Aug",
+	"Sep",
+	"Oct",
+	"Nov",
+	"Dec"
+};
 
-	strftime(s_time_buffer, sizeof(s_time_buffer), clock_is_24h_style() ? "%H:%M:%S" : "%I:%M:%S", tick_time);
-	text_layer_set_text(s_time_layer, s_time_buffer);
+static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
+{
+	static char date_text[] = "MMM/99";
+	static char time_text[] = "99:99am";
+
+	// Date
+	strcpy(date_text, month[tick_time->tm_mon]);
+	date_text[3] = '/';
+	if (tick_time->tm_mday >= 10) {
+		date_text[4] = '0' + (tick_time->tm_mday / 10);
+		date_text[5] = '0' + (tick_time->tm_mday % 10);
+		date_text[6] = '\0';
+	} else {
+		date_text[4] = '0' + tick_time->tm_mday;
+		date_text[5] = '\0';
+	}
+	text_layer_set_text(s_date_layer, date_text);
+
+	// Time
+	const int          hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
+	const char * const am_pm   = (tick_time->tm_hour >= 12) ? "pm" : "am";
+
+	time_text[0] = (hour_12 >= 10) ? '1' : '0' + hour_12;
+	time_text[1] = (hour_12 >= 10) ? '0' + (hour_12 % 10) : ':';
+	time_text[2] = (hour_12 >= 10) ? ':' : '0' + (tick_time->tm_min / 10);
+	time_text[3] = (hour_12 >= 10) ? '0' + (tick_time->tm_min / 10) : '0' + (tick_time->tm_min % 10);
+	time_text[4] = (hour_12 >= 10) ? '0' + (tick_time->tm_min % 10) : am_pm[0];
+	time_text[5] = (hour_12 >= 10) ? am_pm[0] : am_pm[1];
+	time_text[6] = (hour_12 >= 10) ? am_pm[1] : '\0';
+	time_text[7] = '\0';
+
+	text_layer_set_text(s_time_layer, time_text);
+}
+
+#define TEXT_FG_COLOR GColorWhite
+#define TEXT_BG_COLOR GColorBlack
+
+static TextLayer * prv_init_text_layer(const GRect rect, const GTextAlignment align, const uint32_t font_res_id)
+{
+	TextLayer * const layer = text_layer_create(rect);
+
+	text_layer_set_text_color(layer, TEXT_FG_COLOR);
+	text_layer_set_background_color(layer, TEXT_BG_COLOR);
+	text_layer_set_text_alignment(layer, align);
+	text_layer_set_font(layer, fonts_load_custom_font(resource_get_handle(font_res_id)));
+	layer_add_child(window_get_root_layer(s_window), text_layer_get_layer(layer));
+
+	return layer;
 }
 
 static void prv_window_load(Window * const window)
 {
 	Layer * const window_layer = window_get_root_layer(window);
-	const GRect bounds         = layer_get_bounds(window_layer);
+	const GRect   bounds       = layer_get_bounds(window_layer);
 
-	s_time_layer = text_layer_create(GRect(0, 72, bounds.size.w, 20));
-	text_layer_set_text_alignment(s_time_layer, GTextAlignmentCenter);
-	layer_add_child(window_layer, text_layer_get_layer(s_time_layer));
+	window_set_background_color(window, TEXT_BG_COLOR);
+
+	s_date_layer = prv_init_text_layer(GRect(0, 5, bounds.size.w, 27), GTextAlignmentCenter, RESOURCE_ID_FONT_ISO_DATE_23);
+	s_time_layer = prv_init_text_layer(GRect(0, 30, bounds.size.w, 36), GTextAlignmentCenter, RESOURCE_ID_FONT_ISO_TIME_32);
 
 	// Get a tm structure
-	time_t temp = time(NULL);
-	struct tm *tick_time = localtime(&temp);
+	time_t      temp      = time(NULL);
+	struct tm * tick_time = localtime(&temp);
 
 	// Display time immediately
-	prv_tick_handler(tick_time, SECOND_UNIT);
+	prv_tick_handler(tick_time, MINUTE_UNIT);
 
 	// Subscribe to tick timer service
-	tick_timer_service_subscribe(SECOND_UNIT, prv_tick_handler);
+	tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
 }
 
 static void prv_window_unload(Window * const window)
 {
+	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
 	tick_timer_service_unsubscribe();
 }
