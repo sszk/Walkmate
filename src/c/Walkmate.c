@@ -19,36 +19,63 @@ static const char month[12][4] = {
 	"Dec"
 };
 
+static inline char num_to_digit(int n)
+{
+	return '0' + n;
+}
+
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 {
 	static char date_text[] = "MMM/99";
 	static char time_text[] = "99:99am";
 
+	(void)units_changed;
+
 	// Date
 	strcpy(date_text, month[tick_time->tm_mon]);
 	date_text[3] = '/';
 	if (tick_time->tm_mday >= 10) {
-		date_text[4] = '0' + (tick_time->tm_mday / 10);
-		date_text[5] = '0' + (tick_time->tm_mday % 10);
+		date_text[4] = num_to_digit(tick_time->tm_mday / 10);
+		date_text[5] = num_to_digit(tick_time->tm_mday % 10);
 		date_text[6] = '\0';
 	} else {
-		date_text[4] = '0' + tick_time->tm_mday;
+		date_text[4] = num_to_digit(tick_time->tm_mday);
 		date_text[5] = '\0';
 	}
 	text_layer_set_text(s_date_layer, date_text);
 
 	// Time
-	const int          hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
-	const char * const am_pm   = (tick_time->tm_hour >= 12) ? "pm" : "am";
+	if (clock_is_24h_style()) {
+		time_text[0] = num_to_digit(tick_time->tm_hour / 10);
+		time_text[1] = num_to_digit(tick_time->tm_hour % 10);
+		time_text[2] = ':';
+		time_text[3] = num_to_digit(tick_time->tm_min / 10);
+		time_text[4] = num_to_digit(tick_time->tm_min % 10);
+		time_text[5] = '\0';
+	} else {
+		const int  hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
+		const char am_pm   = (tick_time->tm_hour >= 12) ? 'p' : 'a';
 
-	time_text[0] = (hour_12 >= 10) ? '1' : '0' + hour_12;
-	time_text[1] = (hour_12 >= 10) ? '0' + (hour_12 % 10) : ':';
-	time_text[2] = (hour_12 >= 10) ? ':' : '0' + (tick_time->tm_min / 10);
-	time_text[3] = (hour_12 >= 10) ? '0' + (tick_time->tm_min / 10) : '0' + (tick_time->tm_min % 10);
-	time_text[4] = (hour_12 >= 10) ? '0' + (tick_time->tm_min % 10) : am_pm[0];
-	time_text[5] = (hour_12 >= 10) ? am_pm[0] : am_pm[1];
-	time_text[6] = (hour_12 >= 10) ? am_pm[1] : '\0';
-	time_text[7] = '\0';
+		if (hour_12 >= 10) {
+			time_text[0] = '1';
+			time_text[1] = num_to_digit(hour_12 % 10);
+			time_text[2] = ':';
+			time_text[3] = num_to_digit(tick_time->tm_min / 10);
+			time_text[4] = num_to_digit(tick_time->tm_min % 10);
+			time_text[5] = am_pm;
+			time_text[6] = 'm';
+			time_text[7] = '\0';
+		} else {
+			time_text[0] = num_to_digit(hour_12);
+			time_text[1] = ':';
+			time_text[2] = num_to_digit(tick_time->tm_min / 10);
+			time_text[3] = num_to_digit(tick_time->tm_min % 10);
+			time_text[4] = am_pm;
+			time_text[5] = 'm';
+			time_text[6] = '\0';
+			time_text[7] = '\0';
+		}
+	}
 
 	text_layer_set_text(s_time_layer, time_text);
 }
@@ -92,9 +119,9 @@ static void prv_window_load(Window * const window)
 
 static void prv_window_unload(Window * const window)
 {
+	tick_timer_service_unsubscribe();
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
-	tick_timer_service_unsubscribe();
 }
 
 static void prv_init(void)
