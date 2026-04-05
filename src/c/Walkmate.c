@@ -5,6 +5,8 @@ static Window *    s_window;
 static TextLayer * s_date_layer;
 static TextLayer * s_time_layer;
 static Layer *     s_progress_layer;
+static GFont       s_date_font;
+static GFont       s_time_font;
 
 static const int     s_step_goal                   = 20000;
 static const int16_t s_progress_ring_outer_padding = 1;
@@ -51,10 +53,10 @@ static void prv_mark_progress_dirty(void)
 }
 
 static void prv_fill_ring_segment(GContext * const ctx,
-                                  const GRect       rect,
-                                  const GColor      color,
-                                  const int32_t     start_angle,
-                                  const int32_t     end_angle)
+                                  const GRect      rect,
+                                  const GColor     color,
+                                  const int32_t    start_angle,
+                                  const int32_t    end_angle)
 {
 	graphics_context_set_fill_color(ctx, color);
 	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
@@ -64,9 +66,9 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
 	static char steps_text[] = " 99.9k";
 
-	const GRect bounds           = layer_get_bounds(layer);
-	const int   steps            = prv_get_today_steps();
-	int         angle            = TRIG_MAX_ANGLE * steps / s_step_goal;
+	const GRect bounds = layer_get_bounds(layer);
+	const int   steps  = prv_get_today_steps();
+	int         angle  = TRIG_MAX_ANGLE * steps / s_step_goal;
 
 	if (angle > TRIG_MAX_ANGLE) {
 		angle = TRIG_MAX_ANGLE;
@@ -75,9 +77,9 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
 	const int16_t ring_inset = s_progress_ring_outer_padding;
 	const GRect   ring_rect  = GRect((bounds.size.w - diameter) / 2 + ring_inset,
-                                   (bounds.size.h - diameter) / 2 + ring_inset,
-                                   diameter - ring_inset * 2,
-                                   diameter - ring_inset * 2);
+	                                 (bounds.size.h - diameter) / 2 + ring_inset,
+	                                 diameter - ring_inset * 2,
+	                                 diameter - ring_inset * 2);
 
 	if (angle > 0) {
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
@@ -86,7 +88,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	if (steps < 10000) {
 		snprintf(steps_text, sizeof(steps_text), "%d", steps);
 	} else {
-		snprintf(steps_text, sizeof(steps_text), "%.1f", steps / 1000.0);
+		snprintf(steps_text, sizeof(steps_text), "%.1fk", steps / 1000.0);
 	}
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
@@ -167,14 +169,14 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 #define TEXT_FG_COLOR GColorWhite
 #define TEXT_BG_COLOR GColorBlack
 
-static TextLayer * prv_init_text_layer(const GRect rect, const GTextAlignment align, const uint32_t font_res_id)
+static TextLayer * prv_init_text_layer(const GRect rect, const GTextAlignment align, const GFont font)
 {
 	TextLayer * const layer = text_layer_create(rect);
 
 	text_layer_set_text_color(layer, TEXT_FG_COLOR);
 	text_layer_set_background_color(layer, TEXT_BG_COLOR);
 	text_layer_set_text_alignment(layer, align);
-	text_layer_set_font(layer, fonts_load_custom_font(resource_get_handle(font_res_id)));
+	text_layer_set_font(layer, font);
 	layer_add_child(window_get_root_layer(s_window), text_layer_get_layer(layer));
 
 	return layer;
@@ -188,8 +190,10 @@ static void prv_window_load(Window * const window)
 
 	window_set_background_color(window, TEXT_BG_COLOR);
 
-	s_date_layer     = prv_init_text_layer(GRect(0, 5, bounds.size.w, 27), GTextAlignmentCenter, RESOURCE_ID_FONT_ISO_DATE_23);
-	s_time_layer     = prv_init_text_layer(GRect(0, 30, bounds.size.w, 36), GTextAlignmentCenter, RESOURCE_ID_FONT_ISO_TIME_32);
+	s_date_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DATE_23));
+	s_time_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_TIME_32));
+	s_date_layer     = prv_init_text_layer(GRect(0, 5, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
+	s_time_layer     = prv_init_text_layer(GRect(0, 30, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_progress_layer, prv_progress_update_proc);
 	layer_add_child(window_layer, s_progress_layer);
@@ -213,6 +217,8 @@ static void prv_window_unload(Window * const window)
 	layer_destroy(s_progress_layer);
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
+	fonts_unload_custom_font(s_date_font);
+	fonts_unload_custom_font(s_time_font);
 }
 
 static void prv_init(void)
