@@ -8,8 +8,7 @@ static Layer *     s_progress_layer;
 
 static const int     s_step_goal                   = 20000;
 static const int16_t s_progress_ring_outer_padding = 1;
-static const uint8_t s_progress_ring_width         = 20;
-static const uint8_t s_progress_overflow_ring_width = 6;
+static const uint8_t s_progress_ring_width         = 16;
 
 static const char month[12][4] = {
 	"Jan",
@@ -71,13 +70,6 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	                                   (bounds.size.h - diameter) / 2 + ring_inset,
 	                                   diameter - ring_inset * 2,
 	                                   diameter - ring_inset * 2);
-	const int     overflow_steps = steps - s_step_goal;
-
-	int overflow_angle = 0;
-	if (overflow_steps > 0) {
-		const int visible_overflow_steps = overflow_steps > s_step_goal ? s_step_goal : overflow_steps;
-		overflow_angle                   = TRIG_MAX_ANGLE * visible_overflow_steps / s_step_goal;
-	}
 
 	graphics_context_set_stroke_color(ctx, GColorDarkGray);
 	graphics_context_set_stroke_width(ctx, s_progress_ring_width);
@@ -88,22 +80,10 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		graphics_draw_arc(ctx, ring_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 	}
 
-	if (overflow_angle > 0) {
-		const int16_t overflow_inset = ring_inset + s_progress_ring_width / 2 + s_progress_overflow_ring_width;
-		const GRect   overflow_rect  = GRect((bounds.size.w - diameter) / 2 + overflow_inset,
-		                                    (bounds.size.h - diameter) / 2 + overflow_inset,
-		                                    diameter - overflow_inset * 2,
-		                                    diameter - overflow_inset * 2);
-
-		graphics_context_set_stroke_color(ctx, GColorLightGray);
-		graphics_context_set_stroke_width(ctx, s_progress_overflow_ring_width);
-		graphics_draw_arc(ctx, overflow_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + overflow_angle);
-	}
-
 	if (steps < 10000) {
 		snprintf(steps_text, sizeof(steps_text), "%d", steps);
 	} else {
-		snprintf(steps_text, sizeof(steps_text), "%.1f", steps/1000.0);
+		snprintf(steps_text, sizeof(steps_text), "%.1f", steps / 1000.0);
 	}
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
