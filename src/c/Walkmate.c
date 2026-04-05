@@ -62,11 +62,10 @@ static void prv_fill_ring_segment(GContext * const ctx,
 
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
-	static char steps_text[] = "99.9k";
+	static char steps_text[] = " 99.9k";
 
 	const GRect bounds           = layer_get_bounds(layer);
 	const int   steps            = prv_get_today_steps();
-	const int   progress_percent = steps * 100 / s_step_goal;
 	int         angle            = TRIG_MAX_ANGLE * steps / s_step_goal;
 
 	if (angle > TRIG_MAX_ANGLE) {
