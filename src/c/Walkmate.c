@@ -50,6 +50,16 @@ static void prv_mark_progress_dirty(void)
 	}
 }
 
+static void prv_fill_ring_segment(GContext * const ctx,
+                                  const GRect       rect,
+                                  const GColor      color,
+                                  const int32_t     start_angle,
+                                  const int32_t     end_angle)
+{
+	graphics_context_set_fill_color(ctx, color);
+	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
+}
+
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
 	static char steps_text[] = "99.9k";
@@ -63,21 +73,15 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		angle = TRIG_MAX_ANGLE;
 	}
 
-	const int16_t diameter     = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
-	const int16_t stroke_inset = s_progress_ring_width / 2;
-	const int16_t ring_inset   = s_progress_ring_outer_padding + stroke_inset;
-	const GRect   ring_rect    = GRect((bounds.size.w - diameter) / 2 + ring_inset,
-	                                   (bounds.size.h - diameter) / 2 + ring_inset,
-	                                   diameter - ring_inset * 2,
-	                                   diameter - ring_inset * 2);
-
-	graphics_context_set_stroke_color(ctx, GColorDarkGray);
-	graphics_context_set_stroke_width(ctx, s_progress_ring_width);
-	graphics_draw_arc(ctx, ring_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(0), TRIG_MAX_ANGLE);
+	const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
+	const int16_t ring_inset = s_progress_ring_outer_padding;
+	const GRect   ring_rect  = GRect((bounds.size.w - diameter) / 2 + ring_inset,
+                                   (bounds.size.h - diameter) / 2 + ring_inset,
+                                   diameter - ring_inset * 2,
+                                   diameter - ring_inset * 2);
 
 	if (angle > 0) {
-		graphics_context_set_stroke_color(ctx, GColorWhite);
-		graphics_draw_arc(ctx, ring_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
+		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 	}
 
 	if (steps < 10000) {
