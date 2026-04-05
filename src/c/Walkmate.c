@@ -1,6 +1,6 @@
-#include <time.h>
 #include <pebble.h>
 #include <stdio.h>
+#include <time.h>
 
 static Window *    s_window;
 static TextLayer * s_date_layer;
@@ -10,7 +10,7 @@ static GFont       s_date_font;
 static GFont       s_time_font;
 
 enum {
-	APP_KEY_STEP_GOAL      = 10000,
+	APP_KEY_STEP_GOAL     = 10000,
 	PERSIST_KEY_STEP_GOAL = 1,
 	DEFAULT_STEP_GOAL     = 10000,
 	MIN_STEP_GOAL         = 1000,
@@ -145,7 +145,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	if (steps < 10000) {
 		snprintf(steps_text, sizeof(steps_text), "%d", steps);
 	} else {
-		snprintf(steps_text, sizeof(steps_text), "%.1fk", steps / 1000.0);
+		snprintf(steps_text, sizeof(steps_text), "%d.%dk", steps / 1000, (steps % 1000) / 100);
 	}
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
