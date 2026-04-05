@@ -1,4 +1,5 @@
 #include <pebble.h>
+#include <stdio.h>
 
 static Window *    s_window;
 static TextLayer * s_date_layer;
@@ -52,7 +53,7 @@ static void prv_mark_progress_dirty(void)
 
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
-	static char percent_text[] = "99999%";
+	static char steps_text[] = "99.9k";
 
 	const GRect bounds           = layer_get_bounds(layer);
 	const int   steps            = prv_get_today_steps();
@@ -99,10 +100,14 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		graphics_draw_arc(ctx, overflow_rect, GOvalScaleModeFitCircle, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + overflow_angle);
 	}
 
-	snprintf(percent_text, sizeof(percent_text), "%d%%", progress_percent);
+	if (steps < 10000) {
+		snprintf(steps_text, sizeof(steps_text), "%d", steps);
+	} else {
+		snprintf(steps_text, sizeof(steps_text), "%.1f", steps/1000.0);
+	}
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
-	                   percent_text,
+	                   steps_text,
 	                   fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
 	                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 28),
 	                   GTextOverflowModeTrailingEllipsis,
