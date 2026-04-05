@@ -23,10 +23,11 @@
       "watchface": true
     },
     "capabilities": [
-      "health"
+      "health",
+      "configurable"
     ],
     "messageKeys": [
-      "dummy"
+      "STEP_GOAL"
     ],
     "resources": {
         "media": [

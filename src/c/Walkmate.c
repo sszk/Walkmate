@@ -1,3 +1,4 @@
+#include <time.h>
 #include <pebble.h>
 #include <stdio.h>
 
@@ -8,7 +9,15 @@ static Layer *     s_progress_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
 
-static const int     s_step_goal                   = 20000;
+enum {
+	APP_KEY_STEP_GOAL      = 10000,
+	PERSIST_KEY_STEP_GOAL = 1,
+	DEFAULT_STEP_GOAL     = 10000,
+	MIN_STEP_GOAL         = 1000,
+	MAX_STEP_GOAL         = 99999
+};
+
+static int           s_step_goal                   = DEFAULT_STEP_GOAL;
 static const int16_t s_progress_ring_outer_padding = 1;
 static const uint8_t s_progress_ring_width         = 16;
 
@@ -27,9 +36,40 @@ static const char month[12][4] = {
 	"Dec"
 };
 
+static void prv_mark_progress_dirty(void);
+
 static inline char num_to_digit(int n)
 {
 	return '0' + n;
+}
+
+static bool prv_is_valid_step_goal(const int step_goal)
+{
+	return step_goal >= MIN_STEP_GOAL && step_goal <= MAX_STEP_GOAL;
+}
+
+static void prv_set_step_goal(const int step_goal)
+{
+	if (!prv_is_valid_step_goal(step_goal)) {
+		return;
+	}
+
+	s_step_goal = step_goal;
+	persist_write_int(PERSIST_KEY_STEP_GOAL, s_step_goal);
+	prv_mark_progress_dirty();
+}
+
+static void prv_load_step_goal(void)
+{
+	if (persist_exists(PERSIST_KEY_STEP_GOAL)) {
+		const int persisted_step_goal = persist_read_int(PERSIST_KEY_STEP_GOAL);
+		if (prv_is_valid_step_goal(persisted_step_goal)) {
+			s_step_goal = persisted_step_goal;
+			return;
+		}
+	}
+
+	s_step_goal = DEFAULT_STEP_GOAL;
 }
 
 static int prv_get_today_steps(void)
@@ -52,6 +92,18 @@ static void prv_mark_progress_dirty(void)
 	}
 }
 
+static void prv_inbox_received_handler(DictionaryIterator * const iter, void * const context)
+{
+	(void) context;
+
+	const Tuple * const step_goal_tuple = dict_find(iter, APP_KEY_STEP_GOAL);
+	if (step_goal_tuple == NULL || step_goal_tuple->type != TUPLE_INT) {
+		return;
+	}
+
+	prv_set_step_goal(step_goal_tuple->value->int32);
+}
+
 static void prv_fill_ring_segment(GContext * const ctx,
                                   const GRect      rect,
                                   const GColor     color,
@@ -67,8 +119,13 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	static char steps_text[] = " 99.9k";
 
 	const GRect bounds = layer_get_bounds(layer);
-	const int   steps  = prv_get_today_steps();
-	int         angle  = TRIG_MAX_ANGLE * steps / s_step_goal;
+	int         steps  = prv_get_today_steps();
+
+	if (steps < 0) {
+		steps = 0;
+	}
+
+	int angle = TRIG_MAX_ANGLE * steps / s_step_goal;
 
 	if (angle > TRIG_MAX_ANGLE) {
 		angle = TRIG_MAX_ANGLE;
@@ -223,11 +280,15 @@ static void prv_window_unload(Window * const window)
 
 static void prv_init(void)
 {
+	prv_load_step_goal();
+
 	s_window = window_create();
 	window_set_window_handlers(s_window, (WindowHandlers) {
 	                                         .load   = prv_window_load,
 	                                         .unload = prv_window_unload,
 	                                     });
+	app_message_register_inbox_received(prv_inbox_received_handler);
+	app_message_open(64, 64);
 	const bool animated = true;
 	window_stack_push(s_window, animated);
 }
