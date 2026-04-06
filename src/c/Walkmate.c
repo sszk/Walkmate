@@ -1,3 +1,4 @@
+#include "gcolor_definitions.h"
 #include <pebble.h>
 #include <stdio.h>
 #include <time.h>
@@ -116,7 +117,7 @@ static void prv_fill_ring_segment(GContext * const ctx,
 
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
-	static char steps_text[] = " 99.9k";
+	static char steps_text[] = " 99999";
 
 	const GRect bounds = layer_get_bounds(layer);
 	int         steps  = prv_get_today_steps();
@@ -140,13 +141,15 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 
 	if (angle > 0) {
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
+
+		if (steps > s_step_goal) {
+			const int overflow_angle = TRIG_MAX_ANGLE * (steps % s_step_goal) / s_step_goal;
+
+			prv_fill_ring_segment(ctx, ring_rect, GColorBlack, DEG_TO_TRIGANGLE(0) + overflow_angle, DEG_TO_TRIGANGLE(0) + overflow_angle + TRIG_MAX_ANGLE / 60);
+		}
 	}
 
-	if (steps < 10000) {
-		snprintf(steps_text, sizeof(steps_text), "%d", steps);
-	} else {
-		snprintf(steps_text, sizeof(steps_text), "%d.%dk", steps / 1000, (steps % 1000) / 100);
-	}
+	snprintf(steps_text, sizeof(steps_text), "%d", steps);
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
 	                   steps_text,
