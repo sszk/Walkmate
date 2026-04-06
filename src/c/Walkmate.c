@@ -15,12 +15,15 @@ enum {
 	PERSIST_KEY_STEP_GOAL = 1,
 	DEFAULT_STEP_GOAL     = 10000,
 	MIN_STEP_GOAL         = 1000,
-	MAX_STEP_GOAL         = 99999
+	MAX_STEP_GOAL         = 99999,
+	MAX_STEP_DISPLAY      = 99999,
 };
 
-static int           s_step_goal                   = DEFAULT_STEP_GOAL;
-static const int16_t s_progress_ring_outer_padding = 1;
-static const uint8_t s_progress_ring_width         = 16;
+static int           s_step_goal                          = DEFAULT_STEP_GOAL;
+static const int16_t s_progress_ring_outer_padding        = 1;
+static const uint8_t s_progress_ring_width                = 16;
+static const int16_t s_progress_arrow_base_extra          = 2;
+static const uint8_t s_progress_arrow_overflow_line_width = 2;
 
 static const char month[12][4] = {
 	"Jan",
@@ -39,7 +42,7 @@ static const char month[12][4] = {
 
 static void prv_mark_progress_dirty(void);
 
-static inline char num_to_digit(int n)
+static inline char prv_num_to_digit(int n)
 {
 	return '0' + n;
 }
@@ -115,9 +118,92 @@ static void prv_fill_ring_segment(GContext * const ctx,
 	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
 }
 
+static GPoint prv_offset_point(const GPoint point, const int32_t angle, const int16_t distance)
+{
+	return GPoint(point.x + (int16_t) (sin_lookup(angle) * distance / TRIG_MAX_RATIO),
+	              point.y + (int16_t) (-cos_lookup(angle) * distance / TRIG_MAX_RATIO));
+}
+
+static GPoint prv_point_on_circle(const GRect rect, const int16_t radius, const int32_t angle)
+{
+	const GPoint center = grect_center_point(&rect);
+
+	return prv_offset_point(center, angle, radius);
+}
+
+static GPoint prv_get_ring_arrow_tip(const GRect rect, const int32_t angle)
+{
+	const int16_t outer_radius    = rect.size.w / 2 + s_progress_arrow_base_extra;
+	const int16_t inner_radius    = outer_radius - s_progress_ring_width - s_progress_arrow_base_extra;
+	const int16_t triangle_height = (int16_t) (s_progress_ring_width / 2);
+	const GPoint  inner_point     = prv_point_on_circle(rect, inner_radius, angle);
+	const GPoint  outer_point     = prv_point_on_circle(rect, outer_radius, angle);
+	const GPoint  midpoint        = GPoint((inner_point.x + outer_point.x) / 2, (inner_point.y + outer_point.y) / 2);
+
+	return prv_offset_point(midpoint, angle + TRIG_MAX_ANGLE / 4, triangle_height);
+}
+
+static GPoint prv_get_ring_arrow_outer_point(const GRect rect, const int32_t angle)
+{
+	const int16_t outer_radius = rect.size.w / 2 + s_progress_arrow_base_extra;
+
+	return prv_point_on_circle(rect, outer_radius, angle);
+}
+
+static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle, GPoint * const points)
+{
+	const int16_t outer_radius = rect.size.w / 2 + s_progress_arrow_base_extra;
+	const int16_t inner_radius = outer_radius - s_progress_ring_width - s_progress_arrow_base_extra;
+	points[0]                  = prv_point_on_circle(rect, inner_radius, angle);
+	points[1]                  = prv_get_ring_arrow_outer_point(rect, angle);
+	points[2]                  = prv_get_ring_arrow_tip(rect, angle);
+}
+
+static void prv_fill_ring_arrowhead(GContext * const ctx, const GRect rect, const GColor color, const int32_t angle)
+{
+	GPoint points[3];
+
+	prv_get_ring_arrowhead_points(rect, angle, points);
+
+	const GPathInfo arrowhead = {
+		.num_points = 3,
+		.points     = points,
+	};
+	GPath * const path = gpath_create(&arrowhead);
+
+	if (path == NULL) {
+		return;
+	}
+
+	graphics_context_set_fill_color(ctx, color);
+	gpath_draw_filled(ctx, path);
+	gpath_destroy(path);
+}
+
+static void prv_draw_ring_arrowhead(GContext * const ctx, const GRect rect, const int32_t angle)
+{
+	GPoint points[3];
+
+	prv_get_ring_arrowhead_points(rect, angle, points);
+	const GPathInfo arrowhead = {
+		.num_points = 3,
+		.points     = points,
+	};
+	GPath * const path = gpath_create(&arrowhead);
+
+	if (path == NULL) {
+		return;
+	}
+
+	graphics_context_set_stroke_color(ctx, GColorBlack);
+	graphics_context_set_stroke_width(ctx, s_progress_arrow_overflow_line_width);
+	gpath_draw_outline_open(ctx, path);
+	gpath_destroy(path);
+}
+
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
-	static char steps_text[] = " 99999";
+	static char steps_text[] = "99999";
 
 	const GRect bounds = layer_get_bounds(layer);
 	int         steps  = prv_get_today_steps();
@@ -142,14 +228,14 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	if (angle > 0) {
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 
-		if (steps > s_step_goal) {
-			const int overflow_angle = TRIG_MAX_ANGLE * (steps % s_step_goal) / s_step_goal;
-
-			prv_fill_ring_segment(ctx, ring_rect, GColorBlack, DEG_TO_TRIGANGLE(0) + overflow_angle, DEG_TO_TRIGANGLE(0) + overflow_angle + TRIG_MAX_ANGLE / 60);
+		if (steps < s_step_goal) {
+			prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0) + angle);
+		} else {
+			prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(0) + (TRIG_MAX_ANGLE * (steps % s_step_goal) / s_step_goal));
 		}
 	}
 
-	snprintf(steps_text, sizeof(steps_text), "%d", steps);
+	snprintf(steps_text, sizeof(steps_text), "%d", (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY);
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
 	                   steps_text,
@@ -180,22 +266,22 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 	strcpy(date_text, month[tick_time->tm_mon]);
 	date_text[3] = '/';
 	if (tick_time->tm_mday >= 10) {
-		date_text[4] = num_to_digit(tick_time->tm_mday / 10);
-		date_text[5] = num_to_digit(tick_time->tm_mday % 10);
+		date_text[4] = prv_num_to_digit(tick_time->tm_mday / 10);
+		date_text[5] = prv_num_to_digit(tick_time->tm_mday % 10);
 		date_text[6] = '\0';
 	} else {
-		date_text[4] = num_to_digit(tick_time->tm_mday);
+		date_text[4] = prv_num_to_digit(tick_time->tm_mday);
 		date_text[5] = '\0';
 	}
 	text_layer_set_text(s_date_layer, date_text);
 
 	// Time
 	if (clock_is_24h_style()) {
-		time_text[0] = num_to_digit(tick_time->tm_hour / 10);
-		time_text[1] = num_to_digit(tick_time->tm_hour % 10);
+		time_text[0] = prv_num_to_digit(tick_time->tm_hour / 10);
+		time_text[1] = prv_num_to_digit(tick_time->tm_hour % 10);
 		time_text[2] = ':';
-		time_text[3] = num_to_digit(tick_time->tm_min / 10);
-		time_text[4] = num_to_digit(tick_time->tm_min % 10);
+		time_text[3] = prv_num_to_digit(tick_time->tm_min / 10);
+		time_text[4] = prv_num_to_digit(tick_time->tm_min % 10);
 		time_text[5] = '\0';
 	} else {
 		const int  hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
@@ -203,18 +289,18 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 
 		if (hour_12 >= 10) {
 			time_text[0] = '1';
-			time_text[1] = num_to_digit(hour_12 % 10);
+			time_text[1] = prv_num_to_digit(hour_12 % 10);
 			time_text[2] = ':';
-			time_text[3] = num_to_digit(tick_time->tm_min / 10);
-			time_text[4] = num_to_digit(tick_time->tm_min % 10);
+			time_text[3] = prv_num_to_digit(tick_time->tm_min / 10);
+			time_text[4] = prv_num_to_digit(tick_time->tm_min % 10);
 			time_text[5] = am_pm;
 			time_text[6] = 'm';
 			time_text[7] = '\0';
 		} else {
-			time_text[0] = num_to_digit(hour_12);
+			time_text[0] = prv_num_to_digit(hour_12);
 			time_text[1] = ':';
-			time_text[2] = num_to_digit(tick_time->tm_min / 10);
-			time_text[3] = num_to_digit(tick_time->tm_min % 10);
+			time_text[2] = prv_num_to_digit(tick_time->tm_min / 10);
+			time_text[3] = prv_num_to_digit(tick_time->tm_min % 10);
 			time_text[4] = am_pm;
 			time_text[5] = 'm';
 			time_text[6] = '\0';
