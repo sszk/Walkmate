@@ -229,7 +229,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 
 		if (steps < s_step_goal) {
-			prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0) + angle);
+			prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
 		} else {
 			prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(0) + (TRIG_MAX_ANGLE * (steps % s_step_goal) / s_step_goal));
 		}
