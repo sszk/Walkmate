@@ -11,12 +11,13 @@ static GFont       s_date_font;
 static GFont       s_time_font;
 
 enum {
-	APP_KEY_STEP_GOAL     = 10000,
-	PERSIST_KEY_STEP_GOAL = 1,
-	DEFAULT_STEP_GOAL     = 10000,
-	MIN_STEP_GOAL         = 1000,
-	MAX_STEP_GOAL         = 99999,
-	MAX_STEP_DISPLAY      = 99999,
+	APP_KEY_STEP_GOAL      = 10000,
+	PERSIST_KEY_STEP_GOAL  = 1,
+	DEFAULT_STEP_GOAL      = 10000,
+	MIN_STEP_GOAL          = 1000,
+	MAX_STEP_GOAL          = 99999,
+	MAX_STEP_DISPLAY       = 99999,
+	ARROWHEAD_ANGLE_OFFSET = 12,
 };
 
 static int           s_step_goal                          = DEFAULT_STEP_GOAL;
@@ -118,45 +119,23 @@ static void prv_fill_ring_segment(GContext * const ctx,
 	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
 }
 
-static GPoint prv_offset_point(const GPoint point, const int32_t angle, const int16_t distance)
-{
-	return GPoint(point.x + (int16_t) (sin_lookup(angle) * distance / TRIG_MAX_RATIO),
-	              point.y + (int16_t) (-cos_lookup(angle) * distance / TRIG_MAX_RATIO));
-}
-
 static GPoint prv_point_on_circle(const GRect rect, const int16_t radius, const int32_t angle)
 {
 	const GPoint center = grect_center_point(&rect);
 
-	return prv_offset_point(center, angle, radius);
-}
-
-static GPoint prv_get_ring_arrow_tip(const GRect rect, const int32_t angle)
-{
-	const int16_t outer_radius    = rect.size.w / 2 + s_progress_arrow_base_extra;
-	const int16_t inner_radius    = outer_radius - s_progress_ring_width - s_progress_arrow_base_extra;
-	const int16_t triangle_height = (int16_t) (s_progress_ring_width / 2);
-	const GPoint  inner_point     = prv_point_on_circle(rect, inner_radius, angle);
-	const GPoint  outer_point     = prv_point_on_circle(rect, outer_radius, angle);
-	const GPoint  midpoint        = GPoint((inner_point.x + outer_point.x) / 2, (inner_point.y + outer_point.y) / 2);
-
-	return prv_offset_point(midpoint, angle + TRIG_MAX_ANGLE / 4, triangle_height);
-}
-
-static GPoint prv_get_ring_arrow_outer_point(const GRect rect, const int32_t angle)
-{
-	const int16_t outer_radius = rect.size.w / 2 + s_progress_arrow_base_extra;
-
-	return prv_point_on_circle(rect, outer_radius, angle);
+	return GPoint(center.x + (int16_t) (sin_lookup(angle) * radius / TRIG_MAX_RATIO),
+	              center.y + (int16_t) (-cos_lookup(angle) * radius / TRIG_MAX_RATIO));
 }
 
 static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle, GPoint * const points)
 {
 	const int16_t outer_radius = rect.size.w / 2 + s_progress_arrow_base_extra;
 	const int16_t inner_radius = outer_radius - s_progress_ring_width - s_progress_arrow_base_extra;
-	points[0]                  = prv_point_on_circle(rect, inner_radius, angle);
-	points[1]                  = prv_get_ring_arrow_outer_point(rect, angle);
-	points[2]                  = prv_get_ring_arrow_tip(rect, angle);
+	const int16_t mid_radius   = rect.size.w / 2 - (s_progress_ring_width / 2);
+
+	points[0] = prv_point_on_circle(rect, inner_radius, angle);
+	points[1] = prv_point_on_circle(rect, mid_radius, angle + DEG_TO_TRIGANGLE(ARROWHEAD_ANGLE_OFFSET));
+	points[2] = prv_point_on_circle(rect, outer_radius, angle);
 }
 
 static void prv_fill_ring_arrowhead(GContext * const ctx, const GRect rect, const GColor color, const int32_t angle)
@@ -185,6 +164,7 @@ static void prv_draw_ring_arrowhead(GContext * const ctx, const GRect rect, cons
 	GPoint points[3];
 
 	prv_get_ring_arrowhead_points(rect, angle, points);
+
 	const GPathInfo arrowhead = {
 		.num_points = 3,
 		.points     = points,
