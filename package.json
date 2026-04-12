@@ -51,7 +51,7 @@
             },
                         {
                 "characterRegex": "[0-9]",
-                "file": "fonts/Outfit-Light.ttf",
+                "file": "fonts/Outfit-SemiBold.ttf",
                 "name": "FONT_ISO_STEPS_18",
                 "type": "font"
             }

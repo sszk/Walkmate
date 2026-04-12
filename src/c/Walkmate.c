@@ -9,6 +9,7 @@ static TextLayer * s_time_layer;
 static Layer *     s_progress_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
+static GFont       s_steps_font;
 
 enum {
 	APP_KEY_STEP_GOAL      = 10000,
@@ -119,15 +120,16 @@ static GPoint prv_point_on_circle(const GRect rect, const int16_t radius, const 
 {
 	const GPoint center = grect_center_point(&rect);
 
-	return GPoint(center.x + (int16_t) (sin_lookup(angle) * radius / TRIG_MAX_RATIO),
-	              center.y + (int16_t) (-cos_lookup(angle) * radius / TRIG_MAX_RATIO));
+	return GPoint(center.x + (int16_t) (((sin_lookup(angle) * radius) + (TRIG_MAX_RATIO / 2)) / TRIG_MAX_RATIO),
+	              center.y + (int16_t) (((-cos_lookup(angle) * radius) + (TRIG_MAX_RATIO / 2)) / TRIG_MAX_RATIO));
 }
 
 static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle, GPoint * const points)
 {
-	const int16_t outer_radius = rect.size.w / 2 + s_progress_arrow_base_extra;
-	const int16_t inner_radius = outer_radius - s_progress_ring_width - s_progress_arrow_base_extra;
-	const int16_t mid_radius   = rect.size.w / 2 - (s_progress_ring_width / 2);
+	const int16_t base_radius  = rect.size.w / 2;
+	const int16_t outer_radius = base_radius + s_progress_arrow_base_extra;
+	const int16_t inner_radius = base_radius - s_progress_ring_width - s_progress_arrow_base_extra;
+	const int16_t mid_radius   = base_radius - (s_progress_ring_width / 2);
 
 	points[0] = prv_point_on_circle(rect, inner_radius, angle);
 	points[1] = prv_point_on_circle(rect, mid_radius, angle + DEG_TO_TRIGANGLE(ARROWHEAD_ANGLE_OFFSET));
@@ -192,7 +194,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	int overflow_angle;
 
 	if (angle > TRIG_MAX_ANGLE) {
-		angle = TRIG_MAX_ANGLE;
+		angle          = TRIG_MAX_ANGLE;
 		overflow_angle = angle;
 	} else {
 		overflow_angle = angle % TRIG_MAX_ANGLE;
@@ -215,7 +217,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
 	                   steps_text,
-	                   fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_18)),
+	                   s_steps_font,
 	                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 28),
 	                   GTextOverflowModeTrailingEllipsis,
 	                   GTextAlignmentCenter,
@@ -314,6 +316,7 @@ static void prv_window_load(Window * const window)
 
 	s_date_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DATE_23));
 	s_time_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_TIME_32));
+	s_steps_font     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_18));
 	s_date_layer     = prv_init_text_layer(GRect(0, 5, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
 	s_time_layer     = prv_init_text_layer(GRect(0, 30, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
@@ -341,6 +344,7 @@ static void prv_window_unload(Window * const window)
 	text_layer_destroy(s_time_layer);
 	fonts_unload_custom_font(s_date_font);
 	fonts_unload_custom_font(s_time_font);
+	fonts_unload_custom_font(s_steps_font);
 }
 
 static void prv_init(void)
