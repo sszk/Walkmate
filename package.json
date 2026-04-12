@@ -32,7 +32,7 @@
     "resources": {
         "media": [
             {
-                "file": "images/beat-icon.png",
+                "file": "images/Walkmate.png",
                 "menuIcon": true,
                 "name": "ICON_IMAGE",
                 "type": "png"
