@@ -218,7 +218,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_draw_text(ctx,
 	                   steps_text,
 	                   s_steps_font,
-	                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 28),
+	                   GRect(0, bounds.size.h / 2 - 12, bounds.size.w, 28),
 	                   GTextOverflowModeTrailingEllipsis,
 	                   GTextAlignmentCenter,
 	                   NULL);
