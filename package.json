@@ -48,6 +48,12 @@
                 "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_TIME_32",
                 "type": "font"
+            },
+                        {
+                "characterRegex": "[0-9]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_STEPS_18",
+                "type": "font"
             }
         ]
     }

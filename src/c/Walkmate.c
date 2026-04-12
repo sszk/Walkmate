@@ -215,7 +215,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
 	                   steps_text,
-	                   fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
+	                   fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_18)),
 	                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 28),
 	                   GTextOverflowModeTrailingEllipsis,
 	                   GTextAlignmentCenter,
