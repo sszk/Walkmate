@@ -23,7 +23,7 @@ enum {
 static int           s_step_goal                          = DEFAULT_STEP_GOAL;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
-static const int16_t s_progress_arrow_base_extra          = 2;
+static const int16_t s_progress_arrow_base_extra          = 1;
 static const uint8_t s_progress_arrow_overflow_line_width = 2;
 
 static const char month[12][4] = {
@@ -109,11 +109,7 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	prv_set_step_goal(step_goal_tuple->value->int32);
 }
 
-static void prv_fill_ring_segment(GContext * const ctx,
-                                  const GRect      rect,
-                                  const GColor     color,
-                                  const int32_t    start_angle,
-                                  const int32_t    end_angle)
+static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const GColor color, const int32_t start_angle, const int32_t end_angle)
 {
 	graphics_context_set_fill_color(ctx, color);
 	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
@@ -192,10 +188,14 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		steps = 0;
 	}
 
-	int angle = TRIG_MAX_ANGLE * steps / s_step_goal;
+	int angle = ((TRIG_MAX_ANGLE * steps) + (s_step_goal / 2)) / s_step_goal;
+	int overflow_angle;
 
 	if (angle > TRIG_MAX_ANGLE) {
 		angle = TRIG_MAX_ANGLE;
+		overflow_angle = angle;
+	} else {
+		overflow_angle = angle % TRIG_MAX_ANGLE;
 	}
 
 	const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
@@ -207,8 +207,8 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 
 	if (angle > 0) {
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
-		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
-		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + (TRIG_MAX_ANGLE * (steps % s_step_goal) / s_step_goal));
+		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0) + angle);
+		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
 	}
 
 	snprintf(steps_text, sizeof(steps_text), "%d", (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY);
