@@ -120,8 +120,8 @@ static GPoint prv_point_on_circle(const GRect rect, const int16_t radius, const 
 {
 	const GPoint center = grect_center_point(&rect);
 
-	return GPoint(center.x + (int16_t) (((sin_lookup(angle) * radius) + (TRIG_MAX_RATIO / 2)) / TRIG_MAX_RATIO),
-	              center.y + (int16_t) (((-cos_lookup(angle) * radius) + (TRIG_MAX_RATIO / 2)) / TRIG_MAX_RATIO));
+	return GPoint(center.x + (int16_t) ((sin_lookup(angle) * radius) / TRIG_MAX_RATIO),
+	              center.y + (int16_t) ((-cos_lookup(angle) * radius) / TRIG_MAX_RATIO));
 }
 
 static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle, GPoint * const points)
@@ -190,7 +190,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		steps = 0;
 	}
 
-	int angle = ((TRIG_MAX_ANGLE * steps) + (s_step_goal / 2)) / s_step_goal;
+	int angle = (TRIG_MAX_ANGLE * steps) / s_step_goal;
 	int overflow_angle;
 
 	if (angle > TRIG_MAX_ANGLE) {
@@ -209,19 +209,19 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 
 	if (angle > 0) {
 		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
-		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0) + angle);
+		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
 		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
-	}
 
-	snprintf(steps_text, sizeof(steps_text), "%d", (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY);
-	graphics_context_set_text_color(ctx, GColorWhite);
-	graphics_draw_text(ctx,
-	                   steps_text,
-	                   s_steps_font,
-	                   GRect(0, bounds.size.h / 2 - 12, bounds.size.w, 28),
-	                   GTextOverflowModeTrailingEllipsis,
-	                   GTextAlignmentCenter,
-	                   NULL);
+		snprintf(steps_text, sizeof(steps_text), "%d", (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY);
+		graphics_context_set_text_color(ctx, GColorWhite);
+		graphics_draw_text(ctx,
+		                   steps_text,
+		                   s_steps_font,
+		                   GRect(0, bounds.size.h / 2 - 12, bounds.size.w, 28),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter,
+		                   NULL);
+	}
 }
 
 static void prv_health_handler(HealthEventType event, void * context)
