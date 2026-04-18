@@ -190,15 +190,15 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		steps = 0;
 	}
 
-	int angle = (TRIG_MAX_ANGLE * steps) / s_step_goal;
-	int overflow_angle;
+	const int32_t raw_angle = (TRIG_MAX_ANGLE * steps) / s_step_goal;
+	int32_t       angle     = raw_angle;
+	int32_t       overflow_angle;
 
 	if (angle > TRIG_MAX_ANGLE) {
-		angle          = TRIG_MAX_ANGLE;
-		overflow_angle = angle;
-	} else {
-		overflow_angle = angle % TRIG_MAX_ANGLE;
+		angle = TRIG_MAX_ANGLE;
 	}
+
+	overflow_angle = raw_angle % TRIG_MAX_ANGLE;
 
 	const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
 	const int16_t ring_inset = s_progress_ring_outer_padding;
