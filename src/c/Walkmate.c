@@ -188,7 +188,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	const GRect bounds = layer_get_bounds(layer);
 	uint32_t    steps  = prv_get_today_steps();
 
-	const int32_t raw_angle = (int32_t)(((uint64_t)TRIG_MAX_ANGLE * steps) / s_step_goal);
+	const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
 	int32_t       angle     = raw_angle;
 	int32_t       overflow_angle;
 
@@ -220,15 +220,6 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
-	}
-}
-
-static void prv_health_handler(HealthEventType event, void * context)
-{
-	(void) context;
-
-	if (event == HealthEventMovementUpdate || event == HealthEventSignificantUpdate) {
-		prv_mark_progress_dirty();
 	}
 }
 
@@ -331,13 +322,11 @@ static void prv_window_load(Window * const window)
 
 	// Subscribe to tick timer service
 	tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
-	health_service_events_subscribe(prv_health_handler, NULL);
 }
 
 static void prv_window_unload(Window * const window)
 {
 	tick_timer_service_unsubscribe();
-	health_service_events_unsubscribe();
 	layer_destroy(s_progress_layer);
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
