@@ -1,5 +1,7 @@
 #include "gcolor_definitions.h"
+#include <inttypes.h>
 #include <pebble.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <time.h>
 
@@ -21,7 +23,7 @@ enum {
 	ARROWHEAD_ANGLE_OFFSET = 12,
 };
 
-static int           s_step_goal                          = DEFAULT_STEP_GOAL;
+static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
@@ -44,17 +46,17 @@ static const char month[12][4] = {
 
 static void prv_mark_progress_dirty(void);
 
-static inline char prv_num_to_digit(int n)
+static inline char prv_num_to_digit(uint32_t n)
 {
 	return '0' + n;
 }
 
-static bool prv_is_valid_step_goal(const int step_goal)
+static bool prv_is_valid_step_goal(const uint32_t step_goal)
 {
 	return step_goal >= MIN_STEP_GOAL && step_goal <= MAX_STEP_GOAL;
 }
 
-static void prv_set_step_goal(const int step_goal)
+static void prv_set_step_goal(const uint32_t step_goal)
 {
 	if (!prv_is_valid_step_goal(step_goal)) {
 		return;
@@ -68,7 +70,7 @@ static void prv_set_step_goal(const int step_goal)
 static void prv_load_step_goal(void)
 {
 	if (persist_exists(PERSIST_KEY_STEP_GOAL)) {
-		const int persisted_step_goal = persist_read_int(PERSIST_KEY_STEP_GOAL);
+		const uint32_t persisted_step_goal = persist_read_int(PERSIST_KEY_STEP_GOAL);
 		if (prv_is_valid_step_goal(persisted_step_goal)) {
 			s_step_goal = persisted_step_goal;
 			return;
@@ -78,7 +80,7 @@ static void prv_load_step_goal(void)
 	s_step_goal = DEFAULT_STEP_GOAL;
 }
 
-static int prv_get_today_steps(void)
+static uint32_t prv_get_today_steps(void)
 {
 	const time_t start = time_start_of_today();
 	const time_t end   = time(NULL);
@@ -88,7 +90,7 @@ static int prv_get_today_steps(void)
 		return 0;
 	}
 
-	return (int) health_service_sum_today(HealthMetricStepCount);
+	return (uint32_t) health_service_sum_today(HealthMetricStepCount);
 }
 
 static void prv_mark_progress_dirty(void)
@@ -184,13 +186,9 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	static char steps_text[] = "99999";
 
 	const GRect bounds = layer_get_bounds(layer);
-	int         steps  = prv_get_today_steps();
+	uint32_t    steps  = prv_get_today_steps();
 
-	if (steps < 0) {
-		steps = 0;
-	}
-
-	const int32_t raw_angle = (TRIG_MAX_ANGLE * steps) / s_step_goal;
+	const int32_t raw_angle = (int32_t)(((uint64_t)TRIG_MAX_ANGLE * steps) / s_step_goal);
 	int32_t       angle     = raw_angle;
 	int32_t       overflow_angle;
 
@@ -212,7 +210,8 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
 		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
 
-		snprintf(steps_text, sizeof(steps_text), "%d", (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY);
+		const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
+		snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
 		graphics_context_set_text_color(ctx, GColorWhite);
 		graphics_draw_text(ctx,
 		                   steps_text,
@@ -262,8 +261,8 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 		time_text[4] = prv_num_to_digit(tick_time->tm_min % 10);
 		time_text[5] = '\0';
 	} else {
-		const int  hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
-		const char am_pm   = (tick_time->tm_hour >= 12) ? 'p' : 'a';
+		const uint16_t hour_12 = (tick_time->tm_hour % 12 == 0) ? 12 : (tick_time->tm_hour % 12);
+		const char     am_pm   = (tick_time->tm_hour >= 12) ? 'p' : 'a';
 
 		if (hour_12 >= 10) {
 			time_text[0] = '1';
