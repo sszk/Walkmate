@@ -225,7 +225,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		graphics_draw_text(ctx,
 		                   steps_text,
 		                   s_steps_font,
-		                   GRect(0, bounds.size.h / 2 - 12, bounds.size.w, 28),
+		                   GRect(0, bounds.size.h / 2 - 14, bounds.size.w, 28),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
@@ -309,15 +309,15 @@ static void prv_window_load(Window * const window)
 {
 	Layer * const window_layer = window_get_root_layer(window);
 	const GRect   bounds       = layer_get_bounds(window_layer);
-	const int16_t ring_top     = 72;
+	const int16_t ring_top     = 64;
 
 	window_set_background_color(window, TEXT_BG_COLOR);
 
 	s_date_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DATE_23));
 	s_time_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_TIME_32));
-	s_steps_font     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_18));
-	s_date_layer     = prv_init_text_layer(GRect(0, 5, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
-	s_time_layer     = prv_init_text_layer(GRect(0, 30, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
+	s_steps_font     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_20));
+	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
+	s_time_layer     = prv_init_text_layer(GRect(0, 25, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_progress_layer, prv_progress_update_proc);
 	layer_add_child(window_layer, s_progress_layer);

@@ -52,7 +52,7 @@
                         {
                 "characterRegex": "[0-9]",
                 "file": "fonts/Outfit-SemiBold.ttf",
-                "name": "FONT_ISO_STEPS_18",
+                "name": "FONT_ISO_STEPS_20",
                 "type": "font"
             }
         ]
