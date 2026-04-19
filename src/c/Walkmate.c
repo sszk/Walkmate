@@ -1,3 +1,12 @@
+/*
+ * Walkmate
+ * Copyright (c) 2026, Shinsuke Suzuki
+ * All rights reserved.
+ *
+ * This file is part of Walkmate.
+ * Licensed under the BSD 3-Clause License. See LICENSE for details.
+ */
+
 #include "gcolor_definitions.h"
 #include <inttypes.h>
 #include <pebble.h>
