@@ -21,6 +21,7 @@ static Layer *     s_progress_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
 static GFont       s_steps_font;
+static GFont       s_distance_font;
 
 enum {
 	APP_KEY_STEP_GOAL      = 10000,
@@ -100,6 +101,20 @@ static uint32_t prv_get_today_steps(void)
 	}
 
 	return (uint32_t) health_service_sum_today(HealthMetricStepCount);
+}
+
+static uint32_t prv_get_today_distance_meters(void)
+{
+	const time_t start = time_start_of_today();
+	const time_t end   = time(NULL);
+
+	const HealthServiceAccessibilityMask mask =
+	    health_service_metric_accessible(HealthMetricWalkedDistanceMeters, start, end);
+	if ((mask & HealthServiceAccessibilityMaskAvailable) == 0) {
+		return 0;
+	}
+
+	return (uint32_t) health_service_sum_today(HealthMetricWalkedDistanceMeters);
 }
 
 static void prv_mark_progress_dirty(void)
@@ -193,9 +208,11 @@ static void prv_draw_ring_arrowhead(GContext * const ctx, const GRect rect, cons
 static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
 	static char steps_text[] = "99999";
+	static char distance_text[16];
 
-	const GRect bounds = layer_get_bounds(layer);
-	uint32_t    steps  = prv_get_today_steps();
+	const GRect    bounds          = layer_get_bounds(layer);
+	uint32_t       steps           = prv_get_today_steps();
+	const uint32_t distance_meters = prv_get_today_distance_meters();
 
 	const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
 	int32_t       angle     = raw_angle;
@@ -214,22 +231,32 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	                                 diameter - ring_inset * 2,
 	                                 diameter - ring_inset * 2);
 
-	if (angle > 0) {
-		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
-		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
-		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
+	prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
+	prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
+	prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
 
-		const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
-		snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
-		graphics_context_set_text_color(ctx, GColorWhite);
-		graphics_draw_text(ctx,
-		                   steps_text,
-		                   s_steps_font,
-		                   GRect(0, bounds.size.h / 2 - 14, bounds.size.w, 28),
-		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentCenter,
-		                   NULL);
-	}
+	const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
+	snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
+	snprintf(distance_text,
+			sizeof(distance_text),
+			"%" PRIu32 ".%02" PRIu32 "km",
+			distance_meters / 1000,
+			(distance_meters % 1000) / 10);
+	graphics_context_set_text_color(ctx, GColorWhite);
+	graphics_draw_text(ctx,
+				steps_text,
+				s_steps_font,
+				GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
+				GTextOverflowModeTrailingEllipsis,
+				GTextAlignmentCenter,
+				NULL);
+	graphics_draw_text(ctx,
+				distance_text,
+				s_distance_font,
+				GRect(0, bounds.size.h / 2, bounds.size.w, 22),
+				GTextOverflowModeTrailingEllipsis,
+				GTextAlignmentCenter,
+				NULL);
 }
 
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
@@ -316,6 +343,7 @@ static void prv_window_load(Window * const window)
 	s_date_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DATE_23));
 	s_time_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_TIME_32));
 	s_steps_font     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_20));
+	s_distance_font  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DISTANCE_16));
 	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
 	s_time_layer     = prv_init_text_layer(GRect(0, 25, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
@@ -342,6 +370,7 @@ static void prv_window_unload(Window * const window)
 	fonts_unload_custom_font(s_date_font);
 	fonts_unload_custom_font(s_time_font);
 	fonts_unload_custom_font(s_steps_font);
+	fonts_unload_custom_font(s_distance_font);
 }
 
 static void prv_init(void)
