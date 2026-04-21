@@ -210,53 +210,56 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	static char steps_text[] = "99999";
 	static char distance_text[16];
 
-	const GRect    bounds          = layer_get_bounds(layer);
-	uint32_t       steps           = prv_get_today_steps();
-	const uint32_t distance_meters = prv_get_today_distance_meters();
+	uint32_t steps = prv_get_today_steps();
 
-	const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
-	int32_t       angle     = raw_angle;
-	int32_t       overflow_angle;
+	if (steps > 0U) {
+		const GRect    bounds          = layer_get_bounds(layer);
+		const uint32_t distance_meters = prv_get_today_distance_meters();
 
-	if (angle > TRIG_MAX_ANGLE) {
-		angle = TRIG_MAX_ANGLE;
+		const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
+		int32_t       angle     = raw_angle;
+		int32_t       overflow_angle;
+
+		if (angle > TRIG_MAX_ANGLE) {
+			angle = TRIG_MAX_ANGLE;
+		}
+
+		overflow_angle = raw_angle % TRIG_MAX_ANGLE;
+
+		const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
+		const int16_t ring_inset = s_progress_ring_outer_padding;
+		const GRect   ring_rect  = GRect((bounds.size.w - diameter) / 2 + ring_inset,
+		                                 (bounds.size.h - diameter) / 2 + ring_inset,
+		                                 diameter - ring_inset * 2,
+		                                 diameter - ring_inset * 2);
+
+		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
+		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
+		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
+
+		const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
+		snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
+		snprintf(distance_text,
+		         sizeof(distance_text),
+		         "%" PRIu32 ".%01" PRIu32 "km",
+		         distance_meters / 1000,
+		         (distance_meters % 1000) / 100);
+		graphics_context_set_text_color(ctx, GColorWhite);
+		graphics_draw_text(ctx,
+		                   steps_text,
+		                   s_steps_font,
+		                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter,
+		                   NULL);
+		graphics_draw_text(ctx,
+		                   distance_text,
+		                   s_distance_font,
+		                   GRect(0, bounds.size.h / 2, bounds.size.w, 22),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter,
+		                   NULL);
 	}
-
-	overflow_angle = raw_angle % TRIG_MAX_ANGLE;
-
-	const int16_t diameter   = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
-	const int16_t ring_inset = s_progress_ring_outer_padding;
-	const GRect   ring_rect  = GRect((bounds.size.w - diameter) / 2 + ring_inset,
-	                                 (bounds.size.h - diameter) / 2 + ring_inset,
-	                                 diameter - ring_inset * 2,
-	                                 diameter - ring_inset * 2);
-
-	prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
-	prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
-	prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
-
-	const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
-	snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
-	snprintf(distance_text,
-			sizeof(distance_text),
-			"%" PRIu32 ".%01" PRIu32 "km",
-			distance_meters / 1000,
-			(distance_meters % 1000) / 100);
-	graphics_context_set_text_color(ctx, GColorWhite);
-	graphics_draw_text(ctx,
-				steps_text,
-				s_steps_font,
-				GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
-				GTextOverflowModeTrailingEllipsis,
-				GTextAlignmentCenter,
-				NULL);
-	graphics_draw_text(ctx,
-				distance_text,
-				s_distance_font,
-				GRect(0, bounds.size.h / 2, bounds.size.w, 22),
-				GTextOverflowModeTrailingEllipsis,
-				GTextAlignmentCenter,
-				NULL);
 }
 
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
