@@ -239,9 +239,9 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
 	snprintf(distance_text,
 			sizeof(distance_text),
-			"%" PRIu32 ".%02" PRIu32 "km",
+			"%" PRIu32 ".%01" PRIu32 "km",
 			distance_meters / 1000,
-			(distance_meters % 1000) / 10);
+			(distance_meters % 1000) / 100);
 	graphics_context_set_text_color(ctx, GColorWhite);
 	graphics_draw_text(ctx,
 				steps_text,

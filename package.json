@@ -57,7 +57,7 @@
             },
             {
                 "characterRegex": "[0-9.km]",
-                "file": "fonts/Outfit-SemiBold.ttf",
+                "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_DISTANCE_16",
                 "type": "font"
             }
