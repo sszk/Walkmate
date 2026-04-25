@@ -33,7 +33,9 @@
       "WEATHER_REQUEST",
       "WEATHER_TEMPERATURE",
       "WEATHER_TEMPERATURE_MAX",
-      "WEATHER_TEMPERATURE_MIN"
+      "WEATHER_TEMPERATURE_MIN",
+      "TEMPERATURE_DISPLAY_MAX",
+      "TEMPERATURE_DISPLAY_MIN"
     ],
     "resources": {
         "media": [

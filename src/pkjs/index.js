@@ -8,6 +8,12 @@ const DEFAULT_WEATHER_UPDATE_INTERVAL = 30;
 const MIN_WEATHER_UPDATE_INTERVAL = 5;
 const MAX_WEATHER_UPDATE_INTERVAL = 180;
 const WEATHER_UPDATE_INTERVAL_STORAGE_KEY = "walkmate.weatherUpdateInterval";
+const DEFAULT_TEMPERATURE_DISPLAY_MAX = 40;
+const DEFAULT_TEMPERATURE_DISPLAY_MIN = -10;
+const MIN_TEMPERATURE_DISPLAY = -50;
+const MAX_TEMPERATURE_DISPLAY = 60;
+const TEMPERATURE_DISPLAY_MAX_STORAGE_KEY = "walkmate.temperatureDisplayMax";
+const TEMPERATURE_DISPLAY_MIN_STORAGE_KEY = "walkmate.temperatureDisplayMin";
 const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
 const COLOR_RING_COLORS = [
   { name: "White", value: "ffffff" },
@@ -117,6 +123,30 @@ function getInitialWeatherUpdateInterval() {
   return DEFAULT_WEATHER_UPDATE_INTERVAL;
 }
 
+function isValidTemperatureDisplayRange(displayMax, displayMin) {
+  return Number.isFinite(displayMax) &&
+    Number.isFinite(displayMin) &&
+    displayMin >= MIN_TEMPERATURE_DISPLAY &&
+    displayMax <= MAX_TEMPERATURE_DISPLAY &&
+    displayMin < displayMax;
+}
+
+function getInitialTemperatureDisplayRange() {
+  const storedMax = parseInt(localStorage.getItem(TEMPERATURE_DISPLAY_MAX_STORAGE_KEY), 10);
+  const storedMin = parseInt(localStorage.getItem(TEMPERATURE_DISPLAY_MIN_STORAGE_KEY), 10);
+  if (isValidTemperatureDisplayRange(storedMax, storedMin)) {
+    return {
+      max: storedMax,
+      min: storedMin
+    };
+  }
+
+  return {
+    max: DEFAULT_TEMPERATURE_DISPLAY_MAX,
+    min: DEFAULT_TEMPERATURE_DISPLAY_MIN
+  };
+}
+
 function getActiveWatchInfo() {
   if (typeof Pebble.getActiveWatchInfo !== "function") {
     return {};
@@ -154,6 +184,7 @@ function buildConfigUrl() {
   const initialStepGoal = getInitialStepGoal();
   const initialRingColor = normalizeRingColor(localStorage.getItem(RING_COLOR_STORAGE_KEY), ringColorOptions);
   const initialWeatherUpdateInterval = getInitialWeatherUpdateInterval();
+  const initialTemperatureDisplayRange = getInitialTemperatureDisplayRange();
   const colorOptions = ringColorOptions.map(function(option) {
     const checked = option.value === initialRingColor ? " checked" : "";
     return `
@@ -204,6 +235,11 @@ function buildConfigUrl() {
       }
       .section {
         margin-top: 24px;
+      }
+      .temperature-range {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
       }
       .swatches {
         display: grid;
@@ -275,6 +311,19 @@ function buildConfigUrl() {
       <label for="weather-update-interval">Weather Update Interval</label>
       <input id="weather-update-interval" type="number" inputmode="numeric" min="${MIN_WEATHER_UPDATE_INTERVAL}" max="${MAX_WEATHER_UPDATE_INTERVAL}" value="${initialWeatherUpdateInterval}">
     </div>
+    <div class="section">
+      <p>Set the temperature range used by the weather gauge.</p>
+      <div class="temperature-range">
+        <div>
+          <label for="temperature-display-min">Lowest Temperature (C)</label>
+          <input id="temperature-display-min" type="number" min="${MIN_TEMPERATURE_DISPLAY}" max="${MAX_TEMPERATURE_DISPLAY}" value="${initialTemperatureDisplayRange.min}">
+        </div>
+        <div>
+          <label for="temperature-display-max">Highest Temperature (C)</label>
+          <input id="temperature-display-max" type="number" min="${MIN_TEMPERATURE_DISPLAY}" max="${MAX_TEMPERATURE_DISPLAY}" value="${initialTemperatureDisplayRange.max}">
+        </div>
+      </div>
+    </div>
     <button id="save" type="button">Save</button>
     <div id="error" class="error"></div>
     <script>
@@ -283,12 +332,18 @@ function buildConfigUrl() {
         var stepMax = ${MAX_STEP_GOAL};
         var weatherMin = ${MIN_WEATHER_UPDATE_INTERVAL};
         var weatherMax = ${MAX_WEATHER_UPDATE_INTERVAL};
+        var temperatureMin = ${MIN_TEMPERATURE_DISPLAY};
+        var temperatureMax = ${MAX_TEMPERATURE_DISPLAY};
         var stepInput = document.getElementById('step-goal');
         var weatherInput = document.getElementById('weather-update-interval');
+        var temperatureDisplayMinInput = document.getElementById('temperature-display-min');
+        var temperatureDisplayMaxInput = document.getElementById('temperature-display-max');
         var error = document.getElementById('error');
         document.getElementById('save').addEventListener('click', function () {
           var stepGoal = parseInt(stepInput.value, 10);
           var weatherUpdateInterval = parseInt(weatherInput.value, 10);
+          var temperatureDisplayMin = parseInt(temperatureDisplayMinInput.value, 10);
+          var temperatureDisplayMax = parseInt(temperatureDisplayMaxInput.value, 10);
           var colorInput = document.querySelector('input[name="ring-color"]:checked');
           if (!Number.isFinite(stepGoal) || stepGoal < stepMin || stepGoal > stepMax) {
             error.textContent = 'Step goal must be between ' + stepMin + ' and ' + stepMax + '.';
@@ -298,10 +353,16 @@ function buildConfigUrl() {
             error.textContent = 'Weather update interval must be between ' + weatherMin + ' and ' + weatherMax + ' minutes.';
             return;
           }
+          if (!Number.isFinite(temperatureDisplayMin) || !Number.isFinite(temperatureDisplayMax) || temperatureDisplayMin < temperatureMin || temperatureDisplayMax > temperatureMax || temperatureDisplayMin >= temperatureDisplayMax) {
+            error.textContent = 'Temperature range must be between ' + temperatureMin + ' and ' + temperatureMax + ', with lowest below highest.';
+            return;
+          }
           var payload = encodeURIComponent(JSON.stringify({
             stepGoal: stepGoal,
             ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}',
-            weatherUpdateInterval: weatherUpdateInterval
+            weatherUpdateInterval: weatherUpdateInterval,
+            temperatureDisplayMax: temperatureDisplayMax,
+            temperatureDisplayMin: temperatureDisplayMin
           }));
           document.location = 'pebblejs://close#' + payload;
         });
@@ -339,6 +400,8 @@ Pebble.addEventListener("webviewclosed", function(event) {
   const stepGoal = parseInt(config.stepGoal, 10);
   const ringColor = normalizeRingColor(config.ringColor, getRingColorOptions());
   const weatherUpdateInterval = parseInt(config.weatherUpdateInterval, 10);
+  const temperatureDisplayMax = parseInt(config.temperatureDisplayMax, 10);
+  const temperatureDisplayMin = parseInt(config.temperatureDisplayMin, 10);
   if (!Number.isFinite(stepGoal) || stepGoal < MIN_STEP_GOAL || stepGoal > MAX_STEP_GOAL) {
     return;
   }
@@ -349,19 +412,26 @@ Pebble.addEventListener("webviewclosed", function(event) {
   ) {
     return;
   }
+  if (!isValidTemperatureDisplayRange(temperatureDisplayMax, temperatureDisplayMin)) {
+    return;
+  }
 
   localStorage.setItem(STEP_GOAL_STORAGE_KEY, String(stepGoal));
   localStorage.setItem(RING_COLOR_STORAGE_KEY, ringColor);
   localStorage.setItem(WEATHER_UPDATE_INTERVAL_STORAGE_KEY, String(weatherUpdateInterval));
+  localStorage.setItem(TEMPERATURE_DISPLAY_MAX_STORAGE_KEY, String(temperatureDisplayMax));
+  localStorage.setItem(TEMPERATURE_DISPLAY_MIN_STORAGE_KEY, String(temperatureDisplayMin));
 
   Pebble.sendAppMessage(
     {
       STEP_GOAL: stepGoal,
       RING_COLOR: parseInt(ringColor, 16),
       WEATHER_UPDATE_INTERVAL: weatherUpdateInterval,
+      TEMPERATURE_DISPLAY_MAX: temperatureDisplayMax,
+      TEMPERATURE_DISPLAY_MIN: temperatureDisplayMin,
     },
     function() {
-      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval);
+      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval, temperatureDisplayMax, temperatureDisplayMin);
     },
     function(error) {
       console.log("Failed to send settings", error);
