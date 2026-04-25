@@ -35,6 +35,7 @@ enum {
 	APP_KEY_WEATHER_TEMPERATURE_MIN = 10006,
 	APP_KEY_TEMPERATURE_DISPLAY_MAX = 10007,
 	APP_KEY_TEMPERATURE_DISPLAY_MIN = 10008,
+	APP_KEY_SHOW_AUX_GAUGES         = 10009,
 	PERSIST_KEY_STEP_GOAL           = 1,
 	PERSIST_KEY_RING_COLOR          = 2,
 	PERSIST_KEY_WEATHER_UPDATE_INTERVAL,
@@ -43,6 +44,7 @@ enum {
 	PERSIST_KEY_WEATHER_TEMPERATURE_MIN,
 	PERSIST_KEY_TEMPERATURE_DISPLAY_MAX,
 	PERSIST_KEY_TEMPERATURE_DISPLAY_MIN,
+	PERSIST_KEY_SHOW_AUX_GAUGES,
 	DEFAULT_STEP_GOAL               = 10000,
 	DEFAULT_RING_COLOR              = 0xFFFFFF,
 	DEFAULT_WEATHER_UPDATE_INTERVAL = 30,
@@ -71,6 +73,7 @@ static int32_t       s_temperature_min                    = INT32_MAX;
 static time_t        s_last_weather_request               = 0;
 static int32_t       s_temperature_display_max            = DEFAULT_TEMPERATURE_DISPLAY_MAX;
 static int32_t       s_temperature_display_min            = DEFAULT_TEMPERATURE_DISPLAY_MIN;
+static bool          s_show_aux_gauges                    = true;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
@@ -244,6 +247,29 @@ static void prv_load_temperature_display_range(void)
 	s_temperature_display_min = DEFAULT_TEMPERATURE_DISPLAY_MIN;
 }
 
+static void prv_set_show_aux_gauges(const bool show_aux_gauges)
+{
+	s_show_aux_gauges = show_aux_gauges;
+	persist_write_bool(PERSIST_KEY_SHOW_AUX_GAUGES, s_show_aux_gauges);
+
+	if (s_weather_layer != NULL) {
+		layer_mark_dirty(s_weather_layer);
+	}
+	if (s_battery_layer != NULL) {
+		layer_mark_dirty(s_battery_layer);
+	}
+}
+
+static void prv_load_show_aux_gauges(void)
+{
+	if (persist_exists(PERSIST_KEY_SHOW_AUX_GAUGES)) {
+		s_show_aux_gauges = persist_read_bool(PERSIST_KEY_SHOW_AUX_GAUGES);
+		return;
+	}
+
+	s_show_aux_gauges = true;
+}
+
 static void prv_set_weather(const int32_t temperature, const int32_t temperature_max, const int32_t temperature_min)
 {
 	s_temperature     = temperature;
@@ -339,6 +365,11 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	const Tuple * const weather_update_interval_tuple = dict_find(iter, APP_KEY_WEATHER_UPDATE_INTERVAL);
 	if (weather_update_interval_tuple != NULL && weather_update_interval_tuple->type == TUPLE_INT) {
 		prv_set_weather_update_interval(weather_update_interval_tuple->value->int32);
+	}
+
+	const Tuple * const show_aux_gauges_tuple = dict_find(iter, APP_KEY_SHOW_AUX_GAUGES);
+	if (show_aux_gauges_tuple != NULL && show_aux_gauges_tuple->type == TUPLE_INT) {
+		prv_set_show_aux_gauges(show_aux_gauges_tuple->value->int32 != 0);
 	}
 
 	const Tuple * const temperature_display_max_tuple = dict_find(iter, APP_KEY_TEMPERATURE_DISPLAY_MAX);
@@ -531,6 +562,10 @@ static bool prv_weather_has_temperature(void)
 
 static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 {
+	if (!s_show_aux_gauges) {
+		return;
+	}
+
 	const GRect   bounds           = layer_get_bounds(layer);
 	const int16_t diameter         = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
 	const GRect   temperature_rect = GRect((bounds.size.w - diameter) / 2 - s_temperature_ring_outer_offset,
@@ -574,6 +609,10 @@ static int32_t prv_battery_calc_charge_to_angle(const uint8_t charge_percent)
 
 static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 {
+	if (!s_show_aux_gauges) {
+		return;
+	}
+
 	const GRect   bounds       = layer_get_bounds(layer);
 	const int16_t diameter     = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
 	const GRect   battery_rect = GRect((bounds.size.w - diameter) / 2 - s_battery_ring_outer_offset,
@@ -729,6 +768,7 @@ static void prv_init(void)
 	prv_load_ring_color_hex();
 	prv_load_weather_update_interval();
 	prv_load_temperature_display_range();
+	prv_load_show_aux_gauges();
 	prv_load_weather();
 
 	s_window = window_create();

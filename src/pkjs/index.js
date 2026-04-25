@@ -14,6 +14,7 @@ const MIN_TEMPERATURE_DISPLAY = -50;
 const MAX_TEMPERATURE_DISPLAY = 60;
 const TEMPERATURE_DISPLAY_MAX_STORAGE_KEY = "walkmate.temperatureDisplayMax";
 const TEMPERATURE_DISPLAY_MIN_STORAGE_KEY = "walkmate.temperatureDisplayMin";
+const SHOW_AUX_GAUGES_STORAGE_KEY = "walkmate.showAuxGauges";
 const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
 const COLOR_RING_COLORS = [
   { name: "White", value: "ffffff" },
@@ -147,6 +148,11 @@ function getInitialTemperatureDisplayRange() {
   };
 }
 
+function getInitialShowAuxGauges() {
+  const storedValue = localStorage.getItem(SHOW_AUX_GAUGES_STORAGE_KEY);
+  return storedValue === null ? true : storedValue === "true";
+}
+
 function getActiveWatchInfo() {
   if (typeof Pebble.getActiveWatchInfo !== "function") {
     return {};
@@ -185,6 +191,7 @@ function buildConfigUrl() {
   const initialRingColor = normalizeRingColor(localStorage.getItem(RING_COLOR_STORAGE_KEY), ringColorOptions);
   const initialWeatherUpdateInterval = getInitialWeatherUpdateInterval();
   const initialTemperatureDisplayRange = getInitialTemperatureDisplayRange();
+  const initialShowAuxGauges = getInitialShowAuxGauges();
   const colorOptions = ringColorOptions.map(function(option) {
     const checked = option.value === initialRingColor ? " checked" : "";
     return `
@@ -240,6 +247,20 @@ function buildConfigUrl() {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
+      }
+      .toggle-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0;
+        color: #ffffff;
+        line-height: 1.4;
+      }
+      .toggle-option input {
+        width: auto;
+        min-width: 20px;
+        height: 20px;
+        margin: 0;
       }
       .swatches {
         display: grid;
@@ -312,6 +333,12 @@ function buildConfigUrl() {
       <input id="weather-update-interval" type="number" inputmode="numeric" min="${MIN_WEATHER_UPDATE_INTERVAL}" max="${MAX_WEATHER_UPDATE_INTERVAL}" value="${initialWeatherUpdateInterval}">
     </div>
     <div class="section">
+      <label class="toggle-option">
+        <input id="show-aux-gauges" type="checkbox"${initialShowAuxGauges ? " checked" : ""}>
+        <span>Show temperature and battery gauges</span>
+      </label>
+    </div>
+    <div class="section">
       <p>Set the temperature range used by the weather gauge.</p>
       <div class="temperature-range">
         <div>
@@ -336,12 +363,14 @@ function buildConfigUrl() {
         var temperatureMax = ${MAX_TEMPERATURE_DISPLAY};
         var stepInput = document.getElementById('step-goal');
         var weatherInput = document.getElementById('weather-update-interval');
+        var showAuxGaugesInput = document.getElementById('show-aux-gauges');
         var temperatureDisplayMinInput = document.getElementById('temperature-display-min');
         var temperatureDisplayMaxInput = document.getElementById('temperature-display-max');
         var error = document.getElementById('error');
         document.getElementById('save').addEventListener('click', function () {
           var stepGoal = parseInt(stepInput.value, 10);
           var weatherUpdateInterval = parseInt(weatherInput.value, 10);
+          var showAuxGauges = showAuxGaugesInput.checked;
           var temperatureDisplayMin = parseInt(temperatureDisplayMinInput.value, 10);
           var temperatureDisplayMax = parseInt(temperatureDisplayMaxInput.value, 10);
           var colorInput = document.querySelector('input[name="ring-color"]:checked');
@@ -361,6 +390,7 @@ function buildConfigUrl() {
             stepGoal: stepGoal,
             ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}',
             weatherUpdateInterval: weatherUpdateInterval,
+            showAuxGauges: showAuxGauges,
             temperatureDisplayMax: temperatureDisplayMax,
             temperatureDisplayMin: temperatureDisplayMin
           }));
@@ -400,6 +430,7 @@ Pebble.addEventListener("webviewclosed", function(event) {
   const stepGoal = parseInt(config.stepGoal, 10);
   const ringColor = normalizeRingColor(config.ringColor, getRingColorOptions());
   const weatherUpdateInterval = parseInt(config.weatherUpdateInterval, 10);
+  const showAuxGauges = config.showAuxGauges === true;
   const temperatureDisplayMax = parseInt(config.temperatureDisplayMax, 10);
   const temperatureDisplayMin = parseInt(config.temperatureDisplayMin, 10);
   if (!Number.isFinite(stepGoal) || stepGoal < MIN_STEP_GOAL || stepGoal > MAX_STEP_GOAL) {
@@ -419,6 +450,7 @@ Pebble.addEventListener("webviewclosed", function(event) {
   localStorage.setItem(STEP_GOAL_STORAGE_KEY, String(stepGoal));
   localStorage.setItem(RING_COLOR_STORAGE_KEY, ringColor);
   localStorage.setItem(WEATHER_UPDATE_INTERVAL_STORAGE_KEY, String(weatherUpdateInterval));
+  localStorage.setItem(SHOW_AUX_GAUGES_STORAGE_KEY, String(showAuxGauges));
   localStorage.setItem(TEMPERATURE_DISPLAY_MAX_STORAGE_KEY, String(temperatureDisplayMax));
   localStorage.setItem(TEMPERATURE_DISPLAY_MIN_STORAGE_KEY, String(temperatureDisplayMin));
 
@@ -427,11 +459,12 @@ Pebble.addEventListener("webviewclosed", function(event) {
       STEP_GOAL: stepGoal,
       RING_COLOR: parseInt(ringColor, 16),
       WEATHER_UPDATE_INTERVAL: weatherUpdateInterval,
+      SHOW_AUX_GAUGES: showAuxGauges ? 1 : 0,
       TEMPERATURE_DISPLAY_MAX: temperatureDisplayMax,
       TEMPERATURE_DISPLAY_MIN: temperatureDisplayMin,
     },
     function() {
-      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval, temperatureDisplayMax, temperatureDisplayMin);
+      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval, showAuxGauges, temperatureDisplayMax, temperatureDisplayMin);
     },
     function(error) {
       console.log("Failed to send settings", error);

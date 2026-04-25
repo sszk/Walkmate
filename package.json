@@ -35,7 +35,8 @@
       "WEATHER_TEMPERATURE_MAX",
       "WEATHER_TEMPERATURE_MIN",
       "TEMPERATURE_DISPLAY_MAX",
-      "TEMPERATURE_DISPLAY_MIN"
+      "TEMPERATURE_DISPLAY_MIN",
+      "SHOW_AUX_GAUGES"
     ],
     "resources": {
         "media": [
