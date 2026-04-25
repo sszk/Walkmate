@@ -192,12 +192,13 @@ static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const 
 	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
 }
 
-static GPoint prv_point_on_circle(const GRect rect, const int16_t radius, const int32_t angle)
+static GPoint prv_gpoint_from_center_radius(const GRect rect, const int16_t radius, const int32_t angle)
 {
 	const GPoint center = grect_center_point(&rect);
+	const int16_t diameter = radius * 2;
+	const GRect polar_rect = GRect(center.x - radius, center.y - radius, diameter, diameter);
 
-	return GPoint(center.x + (int16_t) ((sin_lookup(angle) * radius) / TRIG_MAX_RATIO),
-	              center.y + (int16_t) ((-cos_lookup(angle) * radius) / TRIG_MAX_RATIO));
+	return gpoint_from_polar(polar_rect, GOvalScaleModeFitCircle, angle);
 }
 
 static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle, GPoint * const points)
@@ -207,9 +208,9 @@ static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle,
 	const int16_t inner_radius = base_radius - s_progress_ring_width - s_progress_arrow_base_extra;
 	const int16_t mid_radius   = base_radius - (s_progress_ring_width / 2);
 
-	points[0] = prv_point_on_circle(rect, inner_radius, angle);
-	points[1] = prv_point_on_circle(rect, mid_radius, angle + DEG_TO_TRIGANGLE(ARROWHEAD_ANGLE_OFFSET));
-	points[2] = prv_point_on_circle(rect, outer_radius, angle);
+	points[0] = prv_gpoint_from_center_radius(rect, inner_radius, angle);
+	points[1] = prv_gpoint_from_center_radius(rect, mid_radius, angle + DEG_TO_TRIGANGLE(ARROWHEAD_ANGLE_OFFSET));
+	points[2] = prv_gpoint_from_center_radius(rect, outer_radius, angle);
 }
 
 static void prv_fill_ring_arrowhead(GContext * const ctx, const GRect rect, const GColor color, const int32_t angle)
