@@ -28,7 +28,12 @@
     ],
     "messageKeys": [
       "STEP_GOAL",
-      "RING_COLOR"
+      "RING_COLOR",
+      "WEATHER_UPDATE_INTERVAL",
+      "WEATHER_REQUEST",
+      "WEATHER_TEMPERATURE",
+      "WEATHER_TEMPERATURE_MAX",
+      "WEATHER_TEMPERATURE_MIN"
     ],
     "resources": {
         "media": [

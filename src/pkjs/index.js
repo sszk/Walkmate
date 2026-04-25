@@ -4,6 +4,11 @@ const MAX_STEP_GOAL = 99999;
 const DEFAULT_RING_COLOR = "ffffff";
 const STEP_GOAL_STORAGE_KEY = "walkmate.stepGoal";
 const RING_COLOR_STORAGE_KEY = "walkmate.ringColor";
+const DEFAULT_WEATHER_UPDATE_INTERVAL = 30;
+const MIN_WEATHER_UPDATE_INTERVAL = 5;
+const MAX_WEATHER_UPDATE_INTERVAL = 180;
+const WEATHER_UPDATE_INTERVAL_STORAGE_KEY = "walkmate.weatherUpdateInterval";
+const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
 const COLOR_RING_COLORS = [
   { name: "White", value: "ffffff" },
   { name: "Blue", value: "55aaff" },
@@ -21,6 +26,75 @@ const GRAYSCALE_RING_COLORS = [
 const MONOCHROME_PLATFORMS = ["aplite", "diorite"];
 const MONOCHROME_MODELS = ["aplite", "diorite", "pebble2", "pebble_2"];
 
+function sendWeatherData(temperature, temperatureMax, temperatureMin) {
+  Pebble.sendAppMessage(
+    {
+      WEATHER_TEMPERATURE: temperature,
+      WEATHER_TEMPERATURE_MAX: temperatureMax,
+      WEATHER_TEMPERATURE_MIN: temperatureMin,
+    },
+    function() {
+      console.log("Updated weather", temperature, temperatureMax, temperatureMin);
+    },
+    function(error) {
+      console.log("Failed to send weather", error);
+    }
+  );
+}
+
+function requestWeather() {
+  navigator.geolocation.getCurrentPosition(
+    function(position) {
+      const latitude = position.coords.latitude;
+      const longitude = position.coords.longitude;
+      const url =
+        WEATHER_API_BASE_URL +
+        "?latitude=" + encodeURIComponent(String(latitude)) +
+        "&longitude=" + encodeURIComponent(String(longitude)) +
+        "&current=temperature_2m" +
+        "&daily=temperature_2m_max,temperature_2m_min" +
+        "&forecast_days=1" +
+        "&timezone=auto";
+      const request = new XMLHttpRequest();
+      request.onload = function() {
+        if (request.status < 200 || request.status >= 300) {
+          console.log("Weather request failed with status", request.status);
+          return;
+        }
+
+        try {
+          const data = JSON.parse(request.responseText);
+          const current = data && data.current ? data.current.temperature_2m : null;
+          const daily = data && data.daily ? data.daily : null;
+          const max = daily && Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max[0] : null;
+          const min = daily && Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min[0] : null;
+
+          if (![current, max, min].every(Number.isFinite)) {
+            throw new Error("Weather payload missing temperature data");
+          }
+
+          sendWeatherData(Math.round(current), Math.round(max), Math.round(min));
+        } catch (error) {
+          console.log("Failed to parse weather response", error);
+        }
+      };
+      request.onerror = function(error) {
+        console.log("Failed to fetch weather", error);
+      };
+      request.open("GET", url);
+      request.send();
+    },
+    function(error) {
+      console.log("Failed to get current position", error);
+    },
+    {
+      enableHighAccuracy: false,
+      maximumAge: 10 * 60 * 1000,
+      timeout: 15 * 1000,
+    }
+  );
+}
+
 function getInitialStepGoal() {
   const storedValue = parseInt(localStorage.getItem(STEP_GOAL_STORAGE_KEY), 10);
   if (Number.isFinite(storedValue) && storedValue >= MIN_STEP_GOAL && storedValue <= MAX_STEP_GOAL) {
@@ -28,6 +102,19 @@ function getInitialStepGoal() {
   }
 
   return DEFAULT_STEP_GOAL;
+}
+
+function getInitialWeatherUpdateInterval() {
+  const storedValue = parseInt(localStorage.getItem(WEATHER_UPDATE_INTERVAL_STORAGE_KEY), 10);
+  if (
+    Number.isFinite(storedValue) &&
+    storedValue >= MIN_WEATHER_UPDATE_INTERVAL &&
+    storedValue <= MAX_WEATHER_UPDATE_INTERVAL
+  ) {
+    return storedValue;
+  }
+
+  return DEFAULT_WEATHER_UPDATE_INTERVAL;
 }
 
 function getActiveWatchInfo() {
@@ -66,6 +153,7 @@ function buildConfigUrl() {
   const ringColorOptions = getRingColorOptions();
   const initialStepGoal = getInitialStepGoal();
   const initialRingColor = normalizeRingColor(localStorage.getItem(RING_COLOR_STORAGE_KEY), ringColorOptions);
+  const initialWeatherUpdateInterval = getInitialWeatherUpdateInterval();
   const colorOptions = ringColorOptions.map(function(option) {
     const checked = option.value === initialRingColor ? " checked" : "";
     return `
@@ -113,6 +201,9 @@ function buildConfigUrl() {
         background: #111111;
         color: #ffffff;
         font-size: 18px;
+      }
+      .section {
+        margin-top: 24px;
       }
       .swatches {
         display: grid;
@@ -170,29 +261,47 @@ function buildConfigUrl() {
   </head>
   <body>
     <h1>Walkmate Settings</h1>
-    <p>Set a goal between ${MIN_STEP_GOAL} and ${MAX_STEP_GOAL} steps.</p>
-    <label for="step-goal">Goal</label>
-    <input id="step-goal" type="number" inputmode="numeric" min="${MIN_STEP_GOAL}" max="${MAX_STEP_GOAL}" value="${initialStepGoal}">
-    <label>Ring Color</label>
-    <div class="swatches">${colorOptions}</div>
+    <div class="section">
+      <p>Set a goal between ${MIN_STEP_GOAL} and ${MAX_STEP_GOAL} steps.</p>
+      <label for="step-goal">Daily Step Goal</label>
+      <input id="step-goal" type="number" inputmode="numeric" min="${MIN_STEP_GOAL}" max="${MAX_STEP_GOAL}" value="${initialStepGoal}">
+    </div>
+    <div class="section">
+      <label>Ring Color</label>
+      <div class="swatches">${colorOptions}</div>
+    </div>
+    <div class="section">
+      <p>Choose how often weather data should refresh, in minutes.</p>
+      <label for="weather-update-interval">Weather Update Interval</label>
+      <input id="weather-update-interval" type="number" inputmode="numeric" min="${MIN_WEATHER_UPDATE_INTERVAL}" max="${MAX_WEATHER_UPDATE_INTERVAL}" value="${initialWeatherUpdateInterval}">
+    </div>
     <button id="save" type="button">Save</button>
     <div id="error" class="error"></div>
     <script>
       (function () {
-        var min = ${MIN_STEP_GOAL};
-        var max = ${MAX_STEP_GOAL};
-        var input = document.getElementById('step-goal');
+        var stepMin = ${MIN_STEP_GOAL};
+        var stepMax = ${MAX_STEP_GOAL};
+        var weatherMin = ${MIN_WEATHER_UPDATE_INTERVAL};
+        var weatherMax = ${MAX_WEATHER_UPDATE_INTERVAL};
+        var stepInput = document.getElementById('step-goal');
+        var weatherInput = document.getElementById('weather-update-interval');
         var error = document.getElementById('error');
         document.getElementById('save').addEventListener('click', function () {
-          var value = parseInt(input.value, 10);
+          var stepGoal = parseInt(stepInput.value, 10);
+          var weatherUpdateInterval = parseInt(weatherInput.value, 10);
           var colorInput = document.querySelector('input[name="ring-color"]:checked');
-          if (!Number.isFinite(value) || value < min || value > max) {
-            error.textContent = 'Enter a number between ' + min + ' and ' + max + '.';
+          if (!Number.isFinite(stepGoal) || stepGoal < stepMin || stepGoal > stepMax) {
+            error.textContent = 'Step goal must be between ' + stepMin + ' and ' + stepMax + '.';
+            return;
+          }
+          if (!Number.isFinite(weatherUpdateInterval) || weatherUpdateInterval < weatherMin || weatherUpdateInterval > weatherMax) {
+            error.textContent = 'Weather update interval must be between ' + weatherMin + ' and ' + weatherMax + ' minutes.';
             return;
           }
           var payload = encodeURIComponent(JSON.stringify({
-            stepGoal: value,
-            ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}'
+            stepGoal: stepGoal,
+            ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}',
+            weatherUpdateInterval: weatherUpdateInterval
           }));
           document.location = 'pebblejs://close#' + payload;
         });
@@ -206,6 +315,12 @@ function buildConfigUrl() {
 
 Pebble.addEventListener("showConfiguration", function() {
   Pebble.openURL(buildConfigUrl());
+});
+
+Pebble.addEventListener("appmessage", function(event) {
+  if (event.payload && event.payload.WEATHER_REQUEST) {
+    requestWeather();
+  }
 });
 
 Pebble.addEventListener("webviewclosed", function(event) {
@@ -223,20 +338,30 @@ Pebble.addEventListener("webviewclosed", function(event) {
 
   const stepGoal = parseInt(config.stepGoal, 10);
   const ringColor = normalizeRingColor(config.ringColor, getRingColorOptions());
+  const weatherUpdateInterval = parseInt(config.weatherUpdateInterval, 10);
   if (!Number.isFinite(stepGoal) || stepGoal < MIN_STEP_GOAL || stepGoal > MAX_STEP_GOAL) {
+    return;
+  }
+  if (
+    !Number.isFinite(weatherUpdateInterval) ||
+    weatherUpdateInterval < MIN_WEATHER_UPDATE_INTERVAL ||
+    weatherUpdateInterval > MAX_WEATHER_UPDATE_INTERVAL
+  ) {
     return;
   }
 
   localStorage.setItem(STEP_GOAL_STORAGE_KEY, String(stepGoal));
   localStorage.setItem(RING_COLOR_STORAGE_KEY, ringColor);
+  localStorage.setItem(WEATHER_UPDATE_INTERVAL_STORAGE_KEY, String(weatherUpdateInterval));
 
   Pebble.sendAppMessage(
     {
       STEP_GOAL: stepGoal,
-      RING_COLOR: parseInt(ringColor, 16)
+      RING_COLOR: parseInt(ringColor, 16),
+      WEATHER_UPDATE_INTERVAL: weatherUpdateInterval,
     },
     function() {
-      console.log("Updated settings", stepGoal, ringColor);
+      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval);
     },
     function(error) {
       console.log("Failed to send settings", error);

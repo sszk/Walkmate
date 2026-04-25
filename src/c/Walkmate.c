@@ -18,30 +18,56 @@ static Window *    s_window;
 static TextLayer * s_date_layer;
 static TextLayer * s_time_layer;
 static Layer *     s_progress_layer;
+static Layer *     s_weather_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
 static GFont       s_steps_font;
 static GFont       s_distance_font;
 
 enum {
-	APP_KEY_STEP_GOAL      = 10000,
-	APP_KEY_RING_COLOR     = 10001,
-	PERSIST_KEY_STEP_GOAL  = 1,
-	PERSIST_KEY_RING_COLOR = 2,
-	DEFAULT_STEP_GOAL      = 10000,
-	DEFAULT_RING_COLOR     = 0xFFFFFF,
-	MIN_STEP_GOAL          = 1000,
-	MAX_STEP_GOAL          = 99999,
-	MAX_STEP_DISPLAY       = 99999,
-	ARROWHEAD_ANGLE_OFFSET = 12,
+	APP_KEY_STEP_GOAL               = 10000,
+	APP_KEY_RING_COLOR              = 10001,
+	APP_KEY_WEATHER_UPDATE_INTERVAL = 10002,
+	APP_KEY_WEATHER_REQUEST         = 10003,
+	APP_KEY_WEATHER_TEMPERATURE     = 10004,
+	APP_KEY_WEATHER_TEMPERATURE_MAX = 10005,
+	APP_KEY_WEATHER_TEMPERATURE_MIN = 10006,
+	PERSIST_KEY_STEP_GOAL           = 1,
+	PERSIST_KEY_RING_COLOR          = 2,
+	PERSIST_KEY_WEATHER_UPDATE_INTERVAL,
+	PERSIST_KEY_WEATHER_TEMPERATURE,
+	PERSIST_KEY_WEATHER_TEMPERATURE_MAX,
+	PERSIST_KEY_WEATHER_TEMPERATURE_MIN,
+	DEFAULT_STEP_GOAL               = 10000,
+	DEFAULT_RING_COLOR              = 0xFFFFFF,
+	DEFAULT_WEATHER_UPDATE_INTERVAL = 30,
+	MIN_STEP_GOAL                   = 1000,
+	MAX_STEP_GOAL                   = 99999,
+	MIN_WEATHER_UPDATE_INTERVAL     = 5,
+	MAX_WEATHER_UPDATE_INTERVAL     = 180,
+	MAX_STEP_DISPLAY                = 99999,
+	ARROWHEAD_ANGLE_OFFSET          = 12,
+	MIN_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(30),
+	MAX_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(150),
 };
 
 static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
 static uint32_t      s_ring_color_hex                     = DEFAULT_RING_COLOR;
+static uint32_t      s_weather_update_interval            = DEFAULT_WEATHER_UPDATE_INTERVAL;
+static int32_t       s_temperature                        = INT32_MAX;
+static int32_t       s_temperature_max                    = INT32_MAX;
+static int32_t       s_temperature_min                    = INT32_MAX;
+static time_t        s_last_weather_request               = 0;
+static int32_t       s_temperature_display_max            = 40;
+static int32_t       s_temperature_display_min            = -10;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
 static const uint8_t s_progress_arrow_overflow_line_width = 2;
+static const int16_t s_temperature_ring_outer_offset      = 4;
+static const uint8_t s_temperature_ring_thickness         = 2;
+static const int16_t s_temperature_ring_display_thickness = 6;
+static const int16_t s_temperature_display_thickness      = 9;
 
 static const char month[12][4] = {
 	"Jan",
@@ -59,6 +85,7 @@ static const char month[12][4] = {
 };
 
 static void prv_mark_progress_dirty(void);
+static void prv_request_weather(void);
 
 static inline char prv_num_to_digit(uint32_t n)
 {
@@ -73,20 +100,24 @@ static bool prv_is_valid_step_goal(const uint32_t step_goal)
 static bool prv_is_valid_ring_color_hex(const uint32_t color_hex)
 {
 	switch (color_hex) {
-		case 0xFFFFFF:
-		case 0xAAAAAA:
-		case 0x555555:
-		case 0x55AAFF:
-		case 0x55FF55:
-		case 0xFFFF55:
-		case 0xFFAA55:
-		case 0xFF5555:
-		case 0xAA55FF:
-		case 0xFF55AA:
-			return true;
-		default:
-			return false;
+	case 0xFFFFFF:
+	case 0xAAAAAA:
+	case 0x55AAFF:
+	case 0x55FF55:
+	case 0xFFFF55:
+	case 0xFFAA55:
+	case 0xFF5555:
+	case 0xAA55FF:
+	case 0xFF55AA:
+		return true;
+	default:
+		return false;
 	}
+}
+
+static bool prv_is_valid_weather_update_interval(const uint32_t weather_update_interval)
+{
+	return weather_update_interval >= MIN_WEATHER_UPDATE_INTERVAL && weather_update_interval <= MAX_WEATHER_UPDATE_INTERVAL;
 }
 
 static void prv_set_step_goal(const uint32_t step_goal)
@@ -137,6 +168,59 @@ static void prv_load_ring_color_hex(void)
 	s_ring_color_hex = DEFAULT_RING_COLOR;
 }
 
+static void prv_set_weather_update_interval(const uint32_t weather_update_interval)
+{
+	if (!prv_is_valid_weather_update_interval(weather_update_interval)) {
+		return;
+	}
+
+	s_weather_update_interval = weather_update_interval;
+	persist_write_int(PERSIST_KEY_WEATHER_UPDATE_INTERVAL, s_weather_update_interval);
+}
+
+static void prv_load_weather_update_interval(void)
+{
+	if (persist_exists(PERSIST_KEY_WEATHER_UPDATE_INTERVAL)) {
+		const uint32_t persisted_weather_update_interval = persist_read_int(PERSIST_KEY_WEATHER_UPDATE_INTERVAL);
+		if (prv_is_valid_weather_update_interval(persisted_weather_update_interval)) {
+			s_weather_update_interval = persisted_weather_update_interval;
+			return;
+		}
+	}
+
+	s_weather_update_interval = DEFAULT_WEATHER_UPDATE_INTERVAL;
+}
+
+static void prv_set_weather(const int32_t temperature, const int32_t temperature_max, const int32_t temperature_min)
+{
+	s_temperature     = temperature;
+	s_temperature_max = temperature_max;
+	s_temperature_min = temperature_min;
+
+	persist_write_int(PERSIST_KEY_WEATHER_TEMPERATURE, s_temperature);
+	persist_write_int(PERSIST_KEY_WEATHER_TEMPERATURE_MAX, s_temperature_max);
+	persist_write_int(PERSIST_KEY_WEATHER_TEMPERATURE_MIN, s_temperature_min);
+
+	if (s_weather_layer != NULL) {
+		layer_mark_dirty(s_weather_layer);
+	}
+}
+
+static void prv_load_weather(void)
+{
+	if (persist_exists(PERSIST_KEY_WEATHER_TEMPERATURE)) {
+		s_temperature = persist_read_int(PERSIST_KEY_WEATHER_TEMPERATURE);
+	}
+
+	if (persist_exists(PERSIST_KEY_WEATHER_TEMPERATURE_MAX)) {
+		s_temperature_max = persist_read_int(PERSIST_KEY_WEATHER_TEMPERATURE_MAX);
+	}
+
+	if (persist_exists(PERSIST_KEY_WEATHER_TEMPERATURE_MIN)) {
+		s_temperature_min = persist_read_int(PERSIST_KEY_WEATHER_TEMPERATURE_MIN);
+	}
+}
+
 static uint32_t prv_get_today_steps(void)
 {
 	const time_t start = time_start_of_today();
@@ -184,6 +268,41 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	if (ring_color_tuple != NULL && ring_color_tuple->type == TUPLE_INT) {
 		prv_set_ring_color_hex(ring_color_tuple->value->int32);
 	}
+
+	const Tuple * const weather_update_interval_tuple = dict_find(iter, APP_KEY_WEATHER_UPDATE_INTERVAL);
+	if (weather_update_interval_tuple != NULL && weather_update_interval_tuple->type == TUPLE_INT) {
+		prv_set_weather_update_interval(weather_update_interval_tuple->value->int32);
+	}
+
+	const Tuple * const temperature_tuple     = dict_find(iter, APP_KEY_WEATHER_TEMPERATURE);
+	const Tuple * const temperature_max_tuple = dict_find(iter, APP_KEY_WEATHER_TEMPERATURE_MAX);
+	const Tuple * const temperature_min_tuple = dict_find(iter, APP_KEY_WEATHER_TEMPERATURE_MIN);
+
+	if (temperature_tuple != NULL && temperature_max_tuple != NULL && temperature_min_tuple != NULL && temperature_tuple->type == TUPLE_INT && temperature_max_tuple->type == TUPLE_INT && temperature_min_tuple->type == TUPLE_INT) {
+		prv_set_weather(temperature_tuple->value->int32,
+		                temperature_max_tuple->value->int32,
+		                temperature_min_tuple->value->int32);
+	}
+}
+
+static void prv_request_weather(void)
+{
+	AppMessageResult     result;
+	DictionaryIterator * out_iter;
+
+	result = app_message_outbox_begin(&out_iter);
+	if (result != APP_MSG_OK || out_iter == NULL) {
+		return;
+	}
+
+	dict_write_uint8(out_iter, APP_KEY_WEATHER_REQUEST, 1);
+	result = app_message_outbox_send();
+	if (result != APP_MSG_OK) {
+		APP_LOG(APP_LOG_LEVEL_WARNING, "Failed to request weather: %d", result);
+		return;
+	}
+
+	s_last_weather_request = time(NULL);
 }
 
 static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const GColor color, const int32_t start_angle, const int32_t end_angle)
@@ -194,9 +313,9 @@ static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const 
 
 static GPoint prv_gpoint_from_center_radius(const GRect rect, const int16_t radius, const int32_t angle)
 {
-	const GPoint center = grect_center_point(&rect);
-	const int16_t diameter = radius * 2;
-	const GRect polar_rect = GRect(center.x - radius, center.y - radius, diameter, diameter);
+	const GPoint  center     = grect_center_point(&rect);
+	const int16_t diameter   = radius * 2;
+	const GRect   polar_rect = GRect(center.x - radius, center.y - radius, diameter, diameter);
 
 	return gpoint_from_polar(polar_rect, GOvalScaleModeFitCircle, angle);
 }
@@ -314,6 +433,55 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	}
 }
 
+static int32_t prv_weather_calc_temperature_to_angle(int16_t temperature)
+{
+	int32_t angle;
+
+	if (temperature <= s_temperature_display_min) {
+		angle = MAX_ANGLE_DISPLAY_TEMP;
+	} else if (temperature >= s_temperature_display_max) {
+		angle = MIN_ANGLE_DISPLAY_TEMP;
+	} else {
+		angle = MAX_ANGLE_DISPLAY_TEMP - (MAX_ANGLE_DISPLAY_TEMP - MIN_ANGLE_DISPLAY_TEMP) * (temperature - s_temperature_display_min) / (s_temperature_display_max - s_temperature_display_min);
+	}
+
+	return angle;
+}
+
+static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
+{
+	const GRect   bounds           = layer_get_bounds(layer);
+	const int16_t diameter         = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
+	const GRect   temperature_rect = GRect((bounds.size.w - diameter) / 2 - s_temperature_ring_outer_offset,
+	                                       (bounds.size.h - diameter) / 2 - s_temperature_ring_outer_offset,
+	                                       diameter + s_temperature_ring_outer_offset * 2,
+	                                       diameter + s_temperature_ring_outer_offset * 2);
+
+	graphics_context_set_fill_color(ctx, GColorWhite);
+	graphics_fill_radial(ctx, temperature_rect, GOvalScaleModeFillCircle, s_temperature_ring_thickness, DEG_TO_TRIGANGLE(30), DEG_TO_TRIGANGLE(150));
+
+	const GRect temperature_ring_display_rect = GRect((bounds.size.w - diameter) / 2 - s_temperature_ring_outer_offset - s_temperature_ring_display_thickness,
+	                                                  (bounds.size.h - diameter) / 2 - s_temperature_ring_outer_offset - s_temperature_ring_display_thickness,
+	                                                  diameter + (s_temperature_ring_outer_offset + s_temperature_ring_display_thickness) * 2,
+	                                                  diameter + (s_temperature_ring_outer_offset + s_temperature_ring_display_thickness) * 2);
+
+	const int32_t start_angle = prv_weather_calc_temperature_to_angle(s_temperature_max);
+	const int32_t end_angle   = prv_weather_calc_temperature_to_angle(s_temperature_min);
+
+	graphics_context_set_fill_color(ctx, GColorDarkGray);
+	graphics_fill_radial(ctx, temperature_ring_display_rect, GOvalScaleModeFillCircle, s_temperature_ring_display_thickness, start_angle, end_angle);
+
+	const GRect temperature_display_rect = GRect((bounds.size.w - diameter) / 2 - s_temperature_ring_outer_offset - s_temperature_display_thickness,
+	                                             (bounds.size.h - diameter) / 2 - s_temperature_ring_outer_offset - s_temperature_display_thickness,
+	                                             diameter + (s_temperature_ring_outer_offset + s_temperature_display_thickness) * 2,
+	                                             diameter + (s_temperature_ring_outer_offset + s_temperature_display_thickness) * 2);
+
+	const int32_t temperature_angle = prv_weather_calc_temperature_to_angle(s_temperature);
+
+	graphics_context_set_fill_color(ctx, GColorWhite);
+	graphics_fill_radial(ctx, temperature_display_rect, GOvalScaleModeFillCircle, s_temperature_display_thickness, temperature_angle - DEG_TO_TRIGANGLE(1), temperature_angle + DEG_TO_TRIGANGLE(1));
+}
+
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 {
 	static char date_text[] = "MMM/99";
@@ -369,6 +537,10 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 
 	text_layer_set_text(s_time_layer, time_text);
 	prv_mark_progress_dirty();
+
+	if (s_last_weather_request == 0 || time(NULL) - s_last_weather_request >= (time_t) (s_weather_update_interval * 60)) {
+		prv_request_weather();
+	}
 }
 
 #define TEXT_FG_COLOR GColorWhite
@@ -404,6 +576,9 @@ static void prv_window_load(Window * const window)
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_progress_layer, prv_progress_update_proc);
 	layer_add_child(window_layer, s_progress_layer);
+	s_weather_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
+	layer_set_update_proc(s_weather_layer, prv_weather_update_proc);
+	layer_add_child(window_layer, s_weather_layer);
 
 	// Get a tm structure
 	time_t      temp      = time(NULL);
@@ -420,6 +595,7 @@ static void prv_window_unload(Window * const window)
 {
 	tick_timer_service_unsubscribe();
 	layer_destroy(s_progress_layer);
+	layer_destroy(s_weather_layer);
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
 	fonts_unload_custom_font(s_date_font);
@@ -432,6 +608,8 @@ static void prv_init(void)
 {
 	prv_load_step_goal();
 	prv_load_ring_color_hex();
+	prv_load_weather_update_interval();
+	prv_load_weather();
 
 	s_window = window_create();
 	window_set_window_handlers(s_window, (WindowHandlers) {
@@ -439,7 +617,7 @@ static void prv_init(void)
 	                                         .unload = prv_window_unload,
 	                                     });
 	app_message_register_inbox_received(prv_inbox_received_handler);
-	app_message_open(64, 64);
+	app_message_open(128, 128);
 	const bool animated = true;
 	window_stack_push(s_window, animated);
 }
