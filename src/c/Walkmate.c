@@ -19,6 +19,7 @@ static TextLayer * s_date_layer;
 static TextLayer * s_time_layer;
 static Layer *     s_progress_layer;
 static Layer *     s_weather_layer;
+static Layer *     s_battery_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
 static GFont       s_steps_font;
@@ -49,6 +50,8 @@ enum {
 	ARROWHEAD_ANGLE_OFFSET          = 12,
 	MIN_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(30),
 	MAX_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(150),
+	MIN_ANGLE_DISPLAY_BATTERY       = DEG_TO_TRIGANGLE(210),
+	MAX_ANGLE_DISPLAY_BATTERY       = DEG_TO_TRIGANGLE(330),
 };
 
 static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
@@ -68,6 +71,9 @@ static const int16_t s_temperature_ring_outer_offset      = 4;
 static const uint8_t s_temperature_ring_thickness         = 2;
 static const int16_t s_temperature_ring_display_thickness = 6;
 static const int16_t s_temperature_display_thickness      = 9;
+static const int16_t s_battery_ring_outer_offset          = 4;
+static const uint8_t s_battery_ring_thickness             = 2;
+static const int16_t s_battery_display_thickness          = 6;
 
 static const char month[12][4] = {
 	"Jan",
@@ -253,6 +259,20 @@ static void prv_mark_progress_dirty(void)
 	if (s_progress_layer != NULL) {
 		layer_mark_dirty(s_progress_layer);
 	}
+}
+
+static void prv_mark_battery_dirty(void)
+{
+	if (s_battery_layer != NULL) {
+		layer_mark_dirty(s_battery_layer);
+	}
+}
+
+static void prv_battery_state_handler(BatteryChargeState charge_state)
+{
+	(void) charge_state;
+
+	prv_mark_battery_dirty();
 }
 
 static void prv_inbox_received_handler(DictionaryIterator * const iter, void * const context)
@@ -482,6 +502,34 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_fill_radial(ctx, temperature_display_rect, GOvalScaleModeFillCircle, s_temperature_display_thickness, temperature_angle - DEG_TO_TRIGANGLE(1), temperature_angle + DEG_TO_TRIGANGLE(1));
 }
 
+static int32_t prv_battery_calc_charge_to_angle(const uint8_t charge_percent)
+{
+	return MIN_ANGLE_DISPLAY_BATTERY + (MAX_ANGLE_DISPLAY_BATTERY - MIN_ANGLE_DISPLAY_BATTERY) * charge_percent / 100;
+}
+
+static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
+{
+	const GRect   bounds       = layer_get_bounds(layer);
+	const int16_t diameter     = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
+	const GRect   battery_rect = GRect((bounds.size.w - diameter) / 2 - s_battery_ring_outer_offset,
+	                                   (bounds.size.h - diameter) / 2 - s_battery_ring_outer_offset,
+	                                   diameter + s_battery_ring_outer_offset * 2,
+	                                   diameter + s_battery_ring_outer_offset * 2);
+
+	graphics_context_set_fill_color(ctx, GColorWhite);
+	graphics_fill_radial(ctx, battery_rect, GOvalScaleModeFillCircle, s_battery_ring_thickness, MIN_ANGLE_DISPLAY_BATTERY, MAX_ANGLE_DISPLAY_BATTERY);
+
+	const BatteryChargeState charge_state   = battery_state_service_peek();
+	const int32_t            battery_angle  = prv_battery_calc_charge_to_angle(charge_state.charge_percent);
+	const GRect              battery_gauge_rect = GRect((bounds.size.w - diameter) / 2 - s_battery_ring_outer_offset - s_battery_display_thickness,
+	                                                    (bounds.size.h - diameter) / 2 - s_battery_ring_outer_offset - s_battery_display_thickness,
+	                                                    diameter + (s_battery_ring_outer_offset + s_battery_display_thickness) * 2,
+	                                                    diameter + (s_battery_ring_outer_offset + s_battery_display_thickness) * 2);
+
+	graphics_context_set_fill_color(ctx, charge_state.is_charging ? GColorWhite : GColorDarkGray);
+	graphics_fill_radial(ctx, battery_gauge_rect, GOvalScaleModeFillCircle, s_battery_display_thickness, MIN_ANGLE_DISPLAY_BATTERY, battery_angle);
+}
+
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 {
 	static char date_text[] = "MMM/99";
@@ -579,6 +627,9 @@ static void prv_window_load(Window * const window)
 	s_weather_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_weather_layer, prv_weather_update_proc);
 	layer_add_child(window_layer, s_weather_layer);
+	s_battery_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
+	layer_set_update_proc(s_battery_layer, prv_battery_update_proc);
+	layer_add_child(window_layer, s_battery_layer);
 
 	// Get a tm structure
 	time_t      temp      = time(NULL);
@@ -589,13 +640,16 @@ static void prv_window_load(Window * const window)
 
 	// Subscribe to tick timer service
 	tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
+	battery_state_service_subscribe(prv_battery_state_handler);
 }
 
 static void prv_window_unload(Window * const window)
 {
+	battery_state_service_unsubscribe();
 	tick_timer_service_unsubscribe();
 	layer_destroy(s_progress_layer);
 	layer_destroy(s_weather_layer);
+	layer_destroy(s_battery_layer);
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
 	fonts_unload_custom_font(s_date_font);
