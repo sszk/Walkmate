@@ -25,8 +25,11 @@ static GFont       s_distance_font;
 
 enum {
 	APP_KEY_STEP_GOAL      = 10000,
+	APP_KEY_RING_COLOR     = 10001,
 	PERSIST_KEY_STEP_GOAL  = 1,
+	PERSIST_KEY_RING_COLOR = 2,
 	DEFAULT_STEP_GOAL      = 10000,
+	DEFAULT_RING_COLOR     = 0xFFFFFF,
 	MIN_STEP_GOAL          = 1000,
 	MAX_STEP_GOAL          = 99999,
 	MAX_STEP_DISPLAY       = 99999,
@@ -34,6 +37,7 @@ enum {
 };
 
 static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
+static uint32_t      s_ring_color_hex                     = DEFAULT_RING_COLOR;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
@@ -66,6 +70,25 @@ static bool prv_is_valid_step_goal(const uint32_t step_goal)
 	return step_goal >= MIN_STEP_GOAL && step_goal <= MAX_STEP_GOAL;
 }
 
+static bool prv_is_valid_ring_color_hex(const uint32_t color_hex)
+{
+	switch (color_hex) {
+		case 0xFFFFFF:
+		case 0xAAAAAA:
+		case 0x555555:
+		case 0x55AAFF:
+		case 0x55FF55:
+		case 0xFFFF55:
+		case 0xFFAA55:
+		case 0xFF5555:
+		case 0xAA55FF:
+		case 0xFF55AA:
+			return true;
+		default:
+			return false;
+	}
+}
+
 static void prv_set_step_goal(const uint32_t step_goal)
 {
 	if (!prv_is_valid_step_goal(step_goal)) {
@@ -74,6 +97,17 @@ static void prv_set_step_goal(const uint32_t step_goal)
 
 	s_step_goal = step_goal;
 	persist_write_int(PERSIST_KEY_STEP_GOAL, s_step_goal);
+	prv_mark_progress_dirty();
+}
+
+static void prv_set_ring_color_hex(const uint32_t color_hex)
+{
+	if (!prv_is_valid_ring_color_hex(color_hex)) {
+		return;
+	}
+
+	s_ring_color_hex = color_hex;
+	persist_write_int(PERSIST_KEY_RING_COLOR, s_ring_color_hex);
 	prv_mark_progress_dirty();
 }
 
@@ -88,6 +122,19 @@ static void prv_load_step_goal(void)
 	}
 
 	s_step_goal = DEFAULT_STEP_GOAL;
+}
+
+static void prv_load_ring_color_hex(void)
+{
+	if (persist_exists(PERSIST_KEY_RING_COLOR)) {
+		const uint32_t persisted_ring_color = persist_read_int(PERSIST_KEY_RING_COLOR);
+		if (prv_is_valid_ring_color_hex(persisted_ring_color)) {
+			s_ring_color_hex = persisted_ring_color;
+			return;
+		}
+	}
+
+	s_ring_color_hex = DEFAULT_RING_COLOR;
 }
 
 static uint32_t prv_get_today_steps(void)
@@ -129,11 +176,14 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	(void) context;
 
 	const Tuple * const step_goal_tuple = dict_find(iter, APP_KEY_STEP_GOAL);
-	if (step_goal_tuple == NULL || step_goal_tuple->type != TUPLE_INT) {
-		return;
+	if (step_goal_tuple != NULL && step_goal_tuple->type == TUPLE_INT) {
+		prv_set_step_goal(step_goal_tuple->value->int32);
 	}
 
-	prv_set_step_goal(step_goal_tuple->value->int32);
+	const Tuple * const ring_color_tuple = dict_find(iter, APP_KEY_RING_COLOR);
+	if (ring_color_tuple != NULL && ring_color_tuple->type == TUPLE_INT) {
+		prv_set_ring_color_hex(ring_color_tuple->value->int32);
+	}
 }
 
 static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const GColor color, const int32_t start_angle, const int32_t end_angle)
@@ -232,9 +282,10 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		                                 (bounds.size.h - diameter) / 2 + ring_inset,
 		                                 diameter - ring_inset * 2,
 		                                 diameter - ring_inset * 2);
+		const GColor  ring_color = GColorFromHEX(s_ring_color_hex);
 
-		prv_fill_ring_segment(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
-		prv_fill_ring_arrowhead(ctx, ring_rect, GColorWhite, DEG_TO_TRIGANGLE(-2) + angle);
+		prv_fill_ring_segment(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
+		prv_fill_ring_arrowhead(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(-2) + angle);
 		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
 
 		const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
@@ -379,6 +430,7 @@ static void prv_window_unload(Window * const window)
 static void prv_init(void)
 {
 	prv_load_step_goal();
+	prv_load_ring_color_hex();
 
 	s_window = window_create();
 	window_set_window_handlers(s_window, (WindowHandlers) {

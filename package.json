@@ -27,7 +27,8 @@
       "configurable"
     ],
     "messageKeys": [
-      "STEP_GOAL"
+      "STEP_GOAL",
+      "RING_COLOR"
     ],
     "resources": {
         "media": [

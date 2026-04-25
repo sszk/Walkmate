@@ -1,7 +1,25 @@
 const DEFAULT_STEP_GOAL = 10000;
 const MIN_STEP_GOAL = 1000;
 const MAX_STEP_GOAL = 99999;
+const DEFAULT_RING_COLOR = "ffffff";
 const STEP_GOAL_STORAGE_KEY = "walkmate.stepGoal";
+const RING_COLOR_STORAGE_KEY = "walkmate.ringColor";
+const COLOR_RING_COLORS = [
+  { name: "White", value: "ffffff" },
+  { name: "Blue", value: "55aaff" },
+  { name: "Green", value: "55ff55" },
+  { name: "Yellow", value: "ffff55" },
+  { name: "Orange", value: "ffaa55" },
+  { name: "Red", value: "ff5555" },
+  { name: "Purple", value: "aa55ff" },
+  { name: "Pink", value: "ff55aa" }
+];
+const GRAYSCALE_RING_COLORS = [
+  { name: "White", value: "ffffff" },
+  { name: "Grey", value: "aaaaaa" }
+];
+const MONOCHROME_PLATFORMS = ["aplite", "diorite"];
+const MONOCHROME_MODELS = ["aplite", "diorite", "pebble2", "pebble_2"];
 
 function getInitialStepGoal() {
   const storedValue = parseInt(localStorage.getItem(STEP_GOAL_STORAGE_KEY), 10);
@@ -12,8 +30,51 @@ function getInitialStepGoal() {
   return DEFAULT_STEP_GOAL;
 }
 
+function getActiveWatchInfo() {
+  if (typeof Pebble.getActiveWatchInfo !== "function") {
+    return {};
+  }
+
+  return Pebble.getActiveWatchInfo() || {};
+}
+
+function isMonochromeWatchInfo(watchInfo) {
+  const platform = String(watchInfo.platform || "").toLowerCase();
+  const model = String(watchInfo.model || "").toLowerCase();
+
+  if (MONOCHROME_PLATFORMS.indexOf(platform) !== -1) {
+    return true;
+  }
+
+  return MONOCHROME_MODELS.some(function(modelName) {
+    return model.indexOf(modelName) !== -1;
+  });
+}
+
+function getRingColorOptions() {
+  return isMonochromeWatchInfo(getActiveWatchInfo()) ? GRAYSCALE_RING_COLORS : COLOR_RING_COLORS;
+}
+
+function normalizeRingColor(value, options) {
+  const color = String(value || "").replace(/^#/, "").toLowerCase();
+  return options.some(function(option) {
+    return option.value === color;
+  }) ? color : DEFAULT_RING_COLOR;
+}
+
 function buildConfigUrl() {
+  const ringColorOptions = getRingColorOptions();
   const initialStepGoal = getInitialStepGoal();
+  const initialRingColor = normalizeRingColor(localStorage.getItem(RING_COLOR_STORAGE_KEY), ringColorOptions);
+  const colorOptions = ringColorOptions.map(function(option) {
+    const checked = option.value === initialRingColor ? " checked" : "";
+    return `
+      <label class="swatch-option" style="--swatch-color: #${option.value};">
+        <input type="radio" name="ring-color" value="${option.value}"${checked}>
+        <span class="swatch"></span>
+        <span class="swatch-label">${option.name}</span>
+      </label>`;
+  }).join("");
   const html = `
 <!doctype html>
 <html lang="en">
@@ -53,6 +114,41 @@ function buildConfigUrl() {
         color: #ffffff;
         font-size: 18px;
       }
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-top: 10px;
+      }
+      .swatch-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        margin: 0;
+        color: #c7c7c7;
+        font-size: 12px;
+      }
+      .swatch-option input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .swatch {
+        box-sizing: border-box;
+        width: 40px;
+        height: 40px;
+        border: 2px solid #444444;
+        border-radius: 50%;
+        background: var(--swatch-color);
+      }
+      .swatch-option input:checked + .swatch {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 3px #555555;
+      }
+      .swatch-label {
+        line-height: 1.2;
+      }
       button {
         width: 100%;
         margin-top: 16px;
@@ -73,10 +169,12 @@ function buildConfigUrl() {
     </style>
   </head>
   <body>
-    <h1>Daily Step Goal</h1>
+    <h1>Walkmate Settings</h1>
     <p>Set a goal between ${MIN_STEP_GOAL} and ${MAX_STEP_GOAL} steps.</p>
     <label for="step-goal">Goal</label>
     <input id="step-goal" type="number" inputmode="numeric" min="${MIN_STEP_GOAL}" max="${MAX_STEP_GOAL}" value="${initialStepGoal}">
+    <label>Ring Color</label>
+    <div class="swatches">${colorOptions}</div>
     <button id="save" type="button">Save</button>
     <div id="error" class="error"></div>
     <script>
@@ -87,11 +185,15 @@ function buildConfigUrl() {
         var error = document.getElementById('error');
         document.getElementById('save').addEventListener('click', function () {
           var value = parseInt(input.value, 10);
+          var colorInput = document.querySelector('input[name="ring-color"]:checked');
           if (!Number.isFinite(value) || value < min || value > max) {
             error.textContent = 'Enter a number between ' + min + ' and ' + max + '.';
             return;
           }
-          var payload = encodeURIComponent(JSON.stringify({ stepGoal: value }));
+          var payload = encodeURIComponent(JSON.stringify({
+            stepGoal: value,
+            ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}'
+          }));
           document.location = 'pebblejs://close#' + payload;
         });
       }());
@@ -120,19 +222,24 @@ Pebble.addEventListener("webviewclosed", function(event) {
   }
 
   const stepGoal = parseInt(config.stepGoal, 10);
+  const ringColor = normalizeRingColor(config.ringColor, getRingColorOptions());
   if (!Number.isFinite(stepGoal) || stepGoal < MIN_STEP_GOAL || stepGoal > MAX_STEP_GOAL) {
     return;
   }
 
   localStorage.setItem(STEP_GOAL_STORAGE_KEY, String(stepGoal));
+  localStorage.setItem(RING_COLOR_STORAGE_KEY, ringColor);
 
   Pebble.sendAppMessage(
-    { STEP_GOAL: stepGoal },
+    {
+      STEP_GOAL: stepGoal,
+      RING_COLOR: parseInt(ringColor, 16)
+    },
     function() {
-      console.log("Updated step goal to", stepGoal);
+      console.log("Updated settings", stepGoal, ringColor);
     },
     function(error) {
-      console.log("Failed to send step goal", error);
+      console.log("Failed to send settings", error);
     }
   );
 });
