@@ -139,9 +139,7 @@ static bool prv_is_valid_weather_update_interval(const uint32_t weather_update_i
 
 static bool prv_is_valid_temperature_display_range(const int32_t display_max, const int32_t display_min)
 {
-	return display_min >= MIN_TEMPERATURE_DISPLAY &&
-	       display_max <= MAX_TEMPERATURE_DISPLAY &&
-	       display_min < display_max;
+	return display_min >= MIN_TEMPERATURE_DISPLAY && display_max <= MAX_TEMPERATURE_DISPLAY && display_min < display_max;
 }
 
 static void prv_set_step_goal(const uint32_t step_goal)
@@ -555,9 +553,7 @@ static int32_t prv_weather_calc_temperature_to_angle(int32_t temperature)
 
 static bool prv_weather_has_temperature(void)
 {
-	return s_temperature != INT32_MAX &&
-	       s_temperature_max != INT32_MAX &&
-	       s_temperature_min != INT32_MAX;
+	return s_temperature != INT32_MAX && s_temperature_max != INT32_MAX && s_temperature_min != INT32_MAX;
 }
 
 static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
@@ -600,6 +596,12 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, temperature_display_rect, GOvalScaleModeFillCircle, s_temperature_display_thickness, temperature_angle - DEG_TO_TRIGANGLE(1), temperature_angle + DEG_TO_TRIGANGLE(1));
+
+	for (int32_t temp = (s_temperature_display_min / 10 + 1) * 10; temp < (s_temperature_display_max / 10) * 10; temp += 10) {
+		const int32_t temp_angle = prv_weather_calc_temperature_to_angle(temp);
+		graphics_context_set_fill_color(ctx, GColorWhite);
+		graphics_fill_radial(ctx, temperature_ring_display_rect, GOvalScaleModeFillCircle, s_temperature_ring_display_thickness, temp_angle - DEG_TO_TRIGANGLE(1), temp_angle + DEG_TO_TRIGANGLE(1));
+	}
 }
 
 static int32_t prv_battery_calc_charge_to_angle(const uint8_t charge_percent)
@@ -623,8 +625,8 @@ static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, battery_rect, GOvalScaleModeFillCircle, s_battery_ring_thickness, MIN_ANGLE_DISPLAY_BATTERY, MAX_ANGLE_DISPLAY_BATTERY);
 
-	const BatteryChargeState charge_state   = battery_state_service_peek();
-	const int32_t            battery_angle  = prv_battery_calc_charge_to_angle(charge_state.charge_percent);
+	const BatteryChargeState charge_state       = battery_state_service_peek();
+	const int32_t            battery_angle      = prv_battery_calc_charge_to_angle(charge_state.charge_percent);
 	const GRect              battery_gauge_rect = GRect((bounds.size.w - diameter) / 2 - s_battery_ring_outer_offset - s_battery_display_thickness,
 	                                                    (bounds.size.h - diameter) / 2 - s_battery_ring_outer_offset - s_battery_display_thickness,
 	                                                    diameter + (s_battery_ring_outer_offset + s_battery_display_thickness) * 2,
@@ -632,6 +634,12 @@ static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 
 	graphics_context_set_fill_color(ctx, charge_state.is_charging ? GColorWhite : GColorDarkGray);
 	graphics_fill_radial(ctx, battery_gauge_rect, GOvalScaleModeFillCircle, s_battery_display_thickness, MIN_ANGLE_DISPLAY_BATTERY, battery_angle);
+
+	for (int32_t percent = 20; percent < charge_state.charge_percent; percent += 20) {
+		const int32_t angle = prv_battery_calc_charge_to_angle(percent);
+		graphics_context_set_fill_color(ctx, GColorBlack);
+		graphics_fill_radial(ctx, battery_gauge_rect, GOvalScaleModeFillCircle, s_battery_display_thickness, angle - DEG_TO_TRIGANGLE(1), angle + DEG_TO_TRIGANGLE(1));
+	}
 }
 
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
