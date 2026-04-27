@@ -597,7 +597,7 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, temperature_display_rect, GOvalScaleModeFillCircle, s_temperature_display_thickness, temperature_angle - DEG_TO_TRIGANGLE(1), temperature_angle + DEG_TO_TRIGANGLE(1));
 
-	for (int32_t temp = (s_temperature_display_min / 10 + 1) * 10; temp < (s_temperature_display_max / 10) * 10; temp += 10) {
+	for (int32_t temp = (s_temperature_display_min / 10 + 1) * 10; temp <= (s_temperature_display_max / 10) * 10; temp += 10) {
 		const int32_t temp_angle = prv_weather_calc_temperature_to_angle(temp);
 		graphics_context_set_fill_color(ctx, GColorWhite);
 		graphics_fill_radial(ctx, temperature_ring_display_rect, GOvalScaleModeFillCircle, s_temperature_ring_display_thickness, temp_angle - DEG_TO_TRIGANGLE(1), temp_angle + DEG_TO_TRIGANGLE(1));
