@@ -14,6 +14,7 @@ const MIN_TEMPERATURE_DISPLAY = -50;
 const MAX_TEMPERATURE_DISPLAY = 60;
 const TEMPERATURE_DISPLAY_MAX_STORAGE_KEY = "walkmate.temperatureDisplayMax";
 const TEMPERATURE_DISPLAY_MIN_STORAGE_KEY = "walkmate.temperatureDisplayMin";
+const TEMPERATURE_RANGE_AUTO_STORAGE_KEY = "walkmate.temperatureRangeAuto";
 const SHOW_AUX_GAUGES_STORAGE_KEY = "walkmate.showAuxGauges";
 const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
 const COLOR_RING_COLORS = [
@@ -148,6 +149,11 @@ function getInitialTemperatureDisplayRange() {
   };
 }
 
+function getInitialTemperatureRangeAuto() {
+  const storedValue = localStorage.getItem(TEMPERATURE_RANGE_AUTO_STORAGE_KEY);
+  return storedValue === null ? true : storedValue === "true";
+}
+
 function getInitialShowAuxGauges() {
   const storedValue = localStorage.getItem(SHOW_AUX_GAUGES_STORAGE_KEY);
   return storedValue === null ? true : storedValue === "true";
@@ -191,6 +197,7 @@ function buildConfigUrl() {
   const initialRingColor = normalizeRingColor(localStorage.getItem(RING_COLOR_STORAGE_KEY), ringColorOptions);
   const initialWeatherUpdateInterval = getInitialWeatherUpdateInterval();
   const initialTemperatureDisplayRange = getInitialTemperatureDisplayRange();
+  const initialTemperatureRangeAuto = getInitialTemperatureRangeAuto();
   const initialShowAuxGauges = getInitialShowAuxGauges();
   const colorOptions = ringColorOptions.map(function(option) {
     const checked = option.value === initialRingColor ? " checked" : "";
@@ -239,6 +246,9 @@ function buildConfigUrl() {
         background: #111111;
         color: #ffffff;
         font-size: 18px;
+      }
+      input:disabled {
+        opacity: 0.55;
       }
       .section {
         margin-top: 24px;
@@ -340,6 +350,10 @@ function buildConfigUrl() {
     </div>
     <div class="section">
       <p>Set the temperature range used by the weather gauge.</p>
+      <label class="toggle-option">
+        <input id="temperature-range-auto" type="checkbox"${initialTemperatureRangeAuto ? " checked" : ""}>
+        <span>Set temperature range automatically</span>
+      </label>
       <div class="temperature-range">
         <div>
           <label for="temperature-display-min">Lowest Temperature (C)</label>
@@ -364,13 +378,21 @@ function buildConfigUrl() {
         var stepInput = document.getElementById('step-goal');
         var weatherInput = document.getElementById('weather-update-interval');
         var showAuxGaugesInput = document.getElementById('show-aux-gauges');
+        var temperatureRangeAutoInput = document.getElementById('temperature-range-auto');
         var temperatureDisplayMinInput = document.getElementById('temperature-display-min');
         var temperatureDisplayMaxInput = document.getElementById('temperature-display-max');
         var error = document.getElementById('error');
+        function updateTemperatureRangeInputs() {
+          temperatureDisplayMinInput.disabled = temperatureRangeAutoInput.checked;
+          temperatureDisplayMaxInput.disabled = temperatureRangeAutoInput.checked;
+        }
+        temperatureRangeAutoInput.addEventListener('change', updateTemperatureRangeInputs);
+        updateTemperatureRangeInputs();
         document.getElementById('save').addEventListener('click', function () {
           var stepGoal = parseInt(stepInput.value, 10);
           var weatherUpdateInterval = parseInt(weatherInput.value, 10);
           var showAuxGauges = showAuxGaugesInput.checked;
+          var temperatureRangeAuto = temperatureRangeAutoInput.checked;
           var temperatureDisplayMin = parseInt(temperatureDisplayMinInput.value, 10);
           var temperatureDisplayMax = parseInt(temperatureDisplayMaxInput.value, 10);
           var colorInput = document.querySelector('input[name="ring-color"]:checked');
@@ -382,7 +404,7 @@ function buildConfigUrl() {
             error.textContent = 'Weather update interval must be between ' + weatherMin + ' and ' + weatherMax + ' minutes.';
             return;
           }
-          if (!Number.isFinite(temperatureDisplayMin) || !Number.isFinite(temperatureDisplayMax) || temperatureDisplayMin < temperatureMin || temperatureDisplayMax > temperatureMax || temperatureDisplayMin >= temperatureDisplayMax) {
+          if (!temperatureRangeAuto && (!Number.isFinite(temperatureDisplayMin) || !Number.isFinite(temperatureDisplayMax) || temperatureDisplayMin < temperatureMin || temperatureDisplayMax > temperatureMax || temperatureDisplayMin >= temperatureDisplayMax)) {
             error.textContent = 'Temperature range must be between ' + temperatureMin + ' and ' + temperatureMax + ', with lowest below highest.';
             return;
           }
@@ -391,6 +413,7 @@ function buildConfigUrl() {
             ringColor: colorInput ? colorInput.value : '${DEFAULT_RING_COLOR}',
             weatherUpdateInterval: weatherUpdateInterval,
             showAuxGauges: showAuxGauges,
+            temperatureRangeAuto: temperatureRangeAuto,
             temperatureDisplayMax: temperatureDisplayMax,
             temperatureDisplayMin: temperatureDisplayMin
           }));
@@ -431,6 +454,7 @@ Pebble.addEventListener("webviewclosed", function(event) {
   const ringColor = normalizeRingColor(config.ringColor, getRingColorOptions());
   const weatherUpdateInterval = parseInt(config.weatherUpdateInterval, 10);
   const showAuxGauges = config.showAuxGauges === true;
+  const temperatureRangeAuto = config.temperatureRangeAuto === true;
   const temperatureDisplayMax = parseInt(config.temperatureDisplayMax, 10);
   const temperatureDisplayMin = parseInt(config.temperatureDisplayMin, 10);
   if (!Number.isFinite(stepGoal) || stepGoal < MIN_STEP_GOAL || stepGoal > MAX_STEP_GOAL) {
@@ -443,16 +467,20 @@ Pebble.addEventListener("webviewclosed", function(event) {
   ) {
     return;
   }
-  if (!isValidTemperatureDisplayRange(temperatureDisplayMax, temperatureDisplayMin)) {
+  if (!temperatureRangeAuto && !isValidTemperatureDisplayRange(temperatureDisplayMax, temperatureDisplayMin)) {
     return;
   }
+
+  const safeTemperatureDisplayMax = isValidTemperatureDisplayRange(temperatureDisplayMax, temperatureDisplayMin) ? temperatureDisplayMax : DEFAULT_TEMPERATURE_DISPLAY_MAX;
+  const safeTemperatureDisplayMin = isValidTemperatureDisplayRange(temperatureDisplayMax, temperatureDisplayMin) ? temperatureDisplayMin : DEFAULT_TEMPERATURE_DISPLAY_MIN;
 
   localStorage.setItem(STEP_GOAL_STORAGE_KEY, String(stepGoal));
   localStorage.setItem(RING_COLOR_STORAGE_KEY, ringColor);
   localStorage.setItem(WEATHER_UPDATE_INTERVAL_STORAGE_KEY, String(weatherUpdateInterval));
   localStorage.setItem(SHOW_AUX_GAUGES_STORAGE_KEY, String(showAuxGauges));
-  localStorage.setItem(TEMPERATURE_DISPLAY_MAX_STORAGE_KEY, String(temperatureDisplayMax));
-  localStorage.setItem(TEMPERATURE_DISPLAY_MIN_STORAGE_KEY, String(temperatureDisplayMin));
+  localStorage.setItem(TEMPERATURE_RANGE_AUTO_STORAGE_KEY, String(temperatureRangeAuto));
+  localStorage.setItem(TEMPERATURE_DISPLAY_MAX_STORAGE_KEY, String(safeTemperatureDisplayMax));
+  localStorage.setItem(TEMPERATURE_DISPLAY_MIN_STORAGE_KEY, String(safeTemperatureDisplayMin));
 
   Pebble.sendAppMessage(
     {
@@ -460,11 +488,12 @@ Pebble.addEventListener("webviewclosed", function(event) {
       RING_COLOR: parseInt(ringColor, 16),
       WEATHER_UPDATE_INTERVAL: weatherUpdateInterval,
       SHOW_AUX_GAUGES: showAuxGauges ? 1 : 0,
-      TEMPERATURE_DISPLAY_MAX: temperatureDisplayMax,
-      TEMPERATURE_DISPLAY_MIN: temperatureDisplayMin,
+      TEMPERATURE_RANGE_AUTO: temperatureRangeAuto ? 1 : 0,
+      TEMPERATURE_DISPLAY_MAX: safeTemperatureDisplayMax,
+      TEMPERATURE_DISPLAY_MIN: safeTemperatureDisplayMin,
     },
     function() {
-      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval, showAuxGauges, temperatureDisplayMax, temperatureDisplayMin);
+      console.log("Updated settings", stepGoal, ringColor, weatherUpdateInterval, showAuxGauges, temperatureRangeAuto, safeTemperatureDisplayMax, safeTemperatureDisplayMin);
     },
     function(error) {
       console.log("Failed to send settings", error);

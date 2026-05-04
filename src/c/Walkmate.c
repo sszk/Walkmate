@@ -36,6 +36,7 @@ enum {
 	APP_KEY_TEMPERATURE_DISPLAY_MAX = 10007,
 	APP_KEY_TEMPERATURE_DISPLAY_MIN = 10008,
 	APP_KEY_SHOW_AUX_GAUGES         = 10009,
+	APP_KEY_TEMPERATURE_RANGE_AUTO  = 10010,
 	PERSIST_KEY_STEP_GOAL           = 1,
 	PERSIST_KEY_RING_COLOR          = 2,
 	PERSIST_KEY_WEATHER_UPDATE_INTERVAL,
@@ -45,6 +46,7 @@ enum {
 	PERSIST_KEY_TEMPERATURE_DISPLAY_MAX,
 	PERSIST_KEY_TEMPERATURE_DISPLAY_MIN,
 	PERSIST_KEY_SHOW_AUX_GAUGES,
+	PERSIST_KEY_TEMPERATURE_RANGE_AUTO,
 	DEFAULT_STEP_GOAL               = 10000,
 	DEFAULT_RING_COLOR              = 0xFFFFFF,
 	DEFAULT_WEATHER_UPDATE_INTERVAL = 30,
@@ -73,6 +75,7 @@ static int32_t       s_temperature_min                    = INT32_MAX;
 static time_t        s_last_weather_request               = 0;
 static int32_t       s_temperature_display_max            = DEFAULT_TEMPERATURE_DISPLAY_MAX;
 static int32_t       s_temperature_display_min            = DEFAULT_TEMPERATURE_DISPLAY_MIN;
+static bool          s_temperature_range_auto             = true;
 static bool          s_show_aux_gauges                    = true;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
@@ -140,6 +143,32 @@ static bool prv_is_valid_weather_update_interval(const uint32_t weather_update_i
 static bool prv_is_valid_temperature_display_range(const int32_t display_max, const int32_t display_min)
 {
 	return display_min >= MIN_TEMPERATURE_DISPLAY && display_max <= MAX_TEMPERATURE_DISPLAY && display_min < display_max;
+}
+
+static int32_t prv_floor_to_step(const int32_t value, const int32_t step)
+{
+	if (value >= 0) {
+		return (value / step) * step;
+	}
+
+	return -(((-value + step - 1) / step) * step);
+}
+
+static int32_t prv_ceil_to_step(const int32_t value, const int32_t step)
+{
+	return -prv_floor_to_step(-value, step);
+}
+
+static int32_t prv_clamp_temperature_display_value(const int32_t value)
+{
+	if (value < MIN_TEMPERATURE_DISPLAY) {
+		return MIN_TEMPERATURE_DISPLAY;
+	}
+	if (value > MAX_TEMPERATURE_DISPLAY) {
+		return MAX_TEMPERATURE_DISPLAY;
+	}
+
+	return value;
 }
 
 static void prv_set_step_goal(const uint32_t step_goal)
@@ -243,6 +272,30 @@ static void prv_load_temperature_display_range(void)
 
 	s_temperature_display_max = DEFAULT_TEMPERATURE_DISPLAY_MAX;
 	s_temperature_display_min = DEFAULT_TEMPERATURE_DISPLAY_MIN;
+}
+
+static void prv_mark_weather_dirty(void)
+{
+	if (s_weather_layer != NULL) {
+		layer_mark_dirty(s_weather_layer);
+	}
+}
+
+static void prv_set_temperature_range_auto(const bool temperature_range_auto)
+{
+	s_temperature_range_auto = temperature_range_auto;
+	persist_write_bool(PERSIST_KEY_TEMPERATURE_RANGE_AUTO, s_temperature_range_auto);
+	prv_mark_weather_dirty();
+}
+
+static void prv_load_temperature_range_auto(void)
+{
+	if (persist_exists(PERSIST_KEY_TEMPERATURE_RANGE_AUTO)) {
+		s_temperature_range_auto = persist_read_bool(PERSIST_KEY_TEMPERATURE_RANGE_AUTO);
+		return;
+	}
+
+	s_temperature_range_auto = true;
 }
 
 static void prv_set_show_aux_gauges(const bool show_aux_gauges)
@@ -368,6 +421,11 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	const Tuple * const show_aux_gauges_tuple = dict_find(iter, APP_KEY_SHOW_AUX_GAUGES);
 	if (show_aux_gauges_tuple != NULL && show_aux_gauges_tuple->type == TUPLE_INT) {
 		prv_set_show_aux_gauges(show_aux_gauges_tuple->value->int32 != 0);
+	}
+
+	const Tuple * const temperature_range_auto_tuple = dict_find(iter, APP_KEY_TEMPERATURE_RANGE_AUTO);
+	if (temperature_range_auto_tuple != NULL && temperature_range_auto_tuple->type == TUPLE_INT) {
+		prv_set_temperature_range_auto(temperature_range_auto_tuple->value->int32 != 0);
 	}
 
 	const Tuple * const temperature_display_max_tuple = dict_find(iter, APP_KEY_TEMPERATURE_DISPLAY_MAX);
@@ -536,16 +594,47 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	}
 }
 
+static void prv_weather_get_temperature_display_range(int32_t * const display_max, int32_t * const display_min)
+{
+	*display_max = s_temperature_display_max;
+	*display_min = s_temperature_display_min;
+
+	if (!s_temperature_range_auto || s_temperature_max == INT32_MAX || s_temperature_min == INT32_MAX) {
+		return;
+	}
+
+	int32_t auto_min = prv_clamp_temperature_display_value(prv_floor_to_step(s_temperature_min, 10) - 1);
+	int32_t auto_max = prv_clamp_temperature_display_value(prv_ceil_to_step(s_temperature_max, 10) + 1);
+
+	if (auto_min >= auto_max) {
+		if (auto_min <= MIN_TEMPERATURE_DISPLAY) {
+			auto_max = MIN_TEMPERATURE_DISPLAY + 10;
+		} else if (auto_max >= MAX_TEMPERATURE_DISPLAY) {
+			auto_min = MAX_TEMPERATURE_DISPLAY - 10;
+		} else {
+			auto_min -= 5;
+			auto_max += 5;
+		}
+	}
+
+	*display_max = auto_max;
+	*display_min = auto_min;
+}
+
 static int32_t prv_weather_calc_temperature_to_angle(int32_t temperature)
 {
 	int32_t angle;
+	int32_t display_max;
+	int32_t display_min;
 
-	if (temperature <= s_temperature_display_min) {
+	prv_weather_get_temperature_display_range(&display_max, &display_min);
+
+	if (temperature <= display_min) {
 		angle = MAX_ANGLE_DISPLAY_TEMP;
-	} else if (temperature >= s_temperature_display_max) {
+	} else if (temperature >= display_max) {
 		angle = MIN_ANGLE_DISPLAY_TEMP;
 	} else {
-		angle = MAX_ANGLE_DISPLAY_TEMP - (MAX_ANGLE_DISPLAY_TEMP - MIN_ANGLE_DISPLAY_TEMP) * (temperature - s_temperature_display_min) / (s_temperature_display_max - s_temperature_display_min);
+		angle = MAX_ANGLE_DISPLAY_TEMP - (MAX_ANGLE_DISPLAY_TEMP - MIN_ANGLE_DISPLAY_TEMP) * (temperature - display_min) / (display_max - display_min);
 	}
 
 	return angle;
@@ -597,7 +686,10 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, temperature_display_rect, GOvalScaleModeFillCircle, s_temperature_display_thickness, temperature_angle - DEG_TO_TRIGANGLE(1), temperature_angle + DEG_TO_TRIGANGLE(1));
 
-	for (int32_t temp = (s_temperature_display_min / 10 + 1) * 10; temp <= (s_temperature_display_max / 10) * 10; temp += 10) {
+	int32_t display_max;
+	int32_t display_min;
+	prv_weather_get_temperature_display_range(&display_max, &display_min);
+	for (int32_t temp = prv_floor_to_step(display_min, 10) + 10; temp <= prv_floor_to_step(display_max, 10); temp += 10) {
 		const int32_t temp_angle = prv_weather_calc_temperature_to_angle(temp);
 		graphics_context_set_fill_color(ctx, GColorWhite);
 		graphics_fill_radial(ctx, temperature_ring_display_rect, GOvalScaleModeFillCircle, s_temperature_ring_display_thickness, temp_angle - DEG_TO_TRIGANGLE(1), temp_angle + DEG_TO_TRIGANGLE(1));
@@ -776,6 +868,7 @@ static void prv_init(void)
 	prv_load_ring_color_hex();
 	prv_load_weather_update_interval();
 	prv_load_temperature_display_range();
+	prv_load_temperature_range_auto();
 	prv_load_show_aux_gauges();
 	prv_load_weather();
 
