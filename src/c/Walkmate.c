@@ -603,8 +603,8 @@ static void prv_weather_get_temperature_display_range(int32_t * const display_ma
 		return;
 	}
 
-	int32_t auto_min = prv_clamp_temperature_display_value(prv_floor_to_step(s_temperature_min, 10) - 1);
-	int32_t auto_max = prv_clamp_temperature_display_value(prv_ceil_to_step(s_temperature_max, 10) + 1);
+	int32_t auto_min = prv_clamp_temperature_display_value(prv_floor_to_step(s_temperature_min, 5) - 1);
+	int32_t auto_max = prv_clamp_temperature_display_value(prv_ceil_to_step(s_temperature_max, 5) + 1);
 
 	if (auto_min >= auto_max) {
 		if (auto_min <= MIN_TEMPERATURE_DISPLAY) {
