@@ -105,6 +105,8 @@ static const char month[12][4] = {
 };
 
 static void prv_mark_progress_dirty(void);
+static void prv_mark_weather_dirty(void);
+static void prv_mark_battery_dirty(void);
 static void prv_request_weather(void);
 
 static inline char prv_num_to_digit(uint32_t n)
@@ -397,6 +399,22 @@ static void prv_battery_state_handler(BatteryChargeState charge_state)
 	(void) charge_state;
 
 	prv_mark_battery_dirty();
+}
+
+static void prv_refresh_display(void)
+{
+	prv_mark_progress_dirty();
+	prv_mark_weather_dirty();
+	prv_mark_battery_dirty();
+	prv_request_weather();
+}
+
+static void prv_accel_tap_handler(AccelAxisType axis, int32_t direction)
+{
+	(void) axis;
+	(void) direction;
+
+	prv_refresh_display();
 }
 
 static void prv_inbox_received_handler(DictionaryIterator * const iter, void * const context)
@@ -845,10 +863,12 @@ static void prv_window_load(Window * const window)
 	// Subscribe to tick timer service
 	tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
 	battery_state_service_subscribe(prv_battery_state_handler);
+	accel_tap_service_subscribe(prv_accel_tap_handler);
 }
 
 static void prv_window_unload(Window * const window)
 {
+	accel_tap_service_unsubscribe();
 	battery_state_service_unsubscribe();
 	tick_timer_service_unsubscribe();
 	layer_destroy(s_progress_layer);
