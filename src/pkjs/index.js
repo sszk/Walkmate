@@ -66,7 +66,8 @@ function requestWeather() {
         "&current=temperature_2m" +
         "&daily=temperature_2m_max,temperature_2m_min" +
         "&forecast_days=1" +
-        "&timezone=auto";
+        "&timezone=auto" +
+        "&_=" + encodeURIComponent(String(Date.now()));
       const request = new XMLHttpRequest();
       request.onload = function() {
         if (request.status < 200 || request.status >= 300) {
@@ -101,7 +102,7 @@ function requestWeather() {
     },
     {
       enableHighAccuracy: false,
-      maximumAge: 10 * 60 * 1000,
+      maximumAge: 0,
       timeout: 15 * 1000,
     }
   );
