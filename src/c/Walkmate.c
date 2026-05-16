@@ -36,7 +36,8 @@ enum {
 	APP_KEY_TEMPERATURE_DISPLAY_MAX = 10007,
 	APP_KEY_TEMPERATURE_DISPLAY_MIN = 10008,
 	APP_KEY_SHOW_AUX_GAUGES         = 10009,
-	APP_KEY_TEMPERATURE_RANGE_AUTO  = 10010,
+	APP_KEY_TEMPERATURE_RANGE_AUTO       = 10010,
+	APP_KEY_TEMPERATURE_PREVIEW_DURATION = 10011,
 	PERSIST_KEY_STEP_GOAL           = 1,
 	PERSIST_KEY_RING_COLOR          = 2,
 	PERSIST_KEY_WEATHER_UPDATE_INTERVAL,
@@ -47,23 +48,27 @@ enum {
 	PERSIST_KEY_TEMPERATURE_DISPLAY_MIN,
 	PERSIST_KEY_SHOW_AUX_GAUGES,
 	PERSIST_KEY_TEMPERATURE_RANGE_AUTO,
+	PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION,
 	DEFAULT_STEP_GOAL               = 10000,
 	DEFAULT_RING_COLOR              = 0xFFFFFF,
 	DEFAULT_WEATHER_UPDATE_INTERVAL = 30,
-	DEFAULT_TEMPERATURE_DISPLAY_MAX = 40,
-	DEFAULT_TEMPERATURE_DISPLAY_MIN = -10,
-	MIN_STEP_GOAL                   = 1000,
-	MAX_STEP_GOAL                   = 99999,
-	MIN_WEATHER_UPDATE_INTERVAL     = 5,
-	MAX_WEATHER_UPDATE_INTERVAL     = 180,
-	MIN_TEMPERATURE_DISPLAY         = -50,
-	MAX_TEMPERATURE_DISPLAY         = 60,
-	MAX_STEP_DISPLAY                = 99999,
-	ARROWHEAD_ANGLE_OFFSET          = 12,
-	MIN_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(30),
-	MAX_ANGLE_DISPLAY_TEMP          = DEG_TO_TRIGANGLE(150),
-	MIN_ANGLE_DISPLAY_BATTERY       = DEG_TO_TRIGANGLE(210),
-	MAX_ANGLE_DISPLAY_BATTERY       = DEG_TO_TRIGANGLE(330),
+	DEFAULT_TEMPERATURE_DISPLAY_MAX      = 40,
+	DEFAULT_TEMPERATURE_DISPLAY_MIN      = -10,
+	DEFAULT_TEMPERATURE_PREVIEW_DURATION = 5,
+	MIN_STEP_GOAL                        = 1000,
+	MAX_STEP_GOAL                        = 99999,
+	MIN_WEATHER_UPDATE_INTERVAL          = 5,
+	MAX_WEATHER_UPDATE_INTERVAL          = 180,
+	MIN_TEMPERATURE_DISPLAY              = -50,
+	MAX_TEMPERATURE_DISPLAY              = 60,
+	MIN_TEMPERATURE_PREVIEW_DURATION     = 1,
+	MAX_TEMPERATURE_PREVIEW_DURATION     = 30,
+	MAX_STEP_DISPLAY                     = 99999,
+	ARROWHEAD_ANGLE_OFFSET               = 12,
+	MIN_ANGLE_DISPLAY_TEMP               = DEG_TO_TRIGANGLE(30),
+	MAX_ANGLE_DISPLAY_TEMP               = DEG_TO_TRIGANGLE(150),
+	MIN_ANGLE_DISPLAY_BATTERY            = DEG_TO_TRIGANGLE(210),
+	MAX_ANGLE_DISPLAY_BATTERY            = DEG_TO_TRIGANGLE(330),
 };
 
 static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
@@ -77,6 +82,9 @@ static int32_t       s_temperature_display_max            = DEFAULT_TEMPERATURE_
 static int32_t       s_temperature_display_min            = DEFAULT_TEMPERATURE_DISPLAY_MIN;
 static bool          s_temperature_range_auto             = true;
 static bool          s_show_aux_gauges                    = true;
+static uint32_t      s_temperature_preview_duration       = DEFAULT_TEMPERATURE_PREVIEW_DURATION;
+static bool          s_show_temperature_preview           = false;
+static AppTimer *    s_temperature_preview_timer;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
@@ -145,6 +153,11 @@ static bool prv_is_valid_weather_update_interval(const uint32_t weather_update_i
 static bool prv_is_valid_temperature_display_range(const int32_t display_max, const int32_t display_min)
 {
 	return display_min >= MIN_TEMPERATURE_DISPLAY && display_max <= MAX_TEMPERATURE_DISPLAY && display_min < display_max;
+}
+
+static bool prv_is_valid_temperature_preview_duration(const uint32_t duration)
+{
+	return duration >= MIN_TEMPERATURE_PREVIEW_DURATION && duration <= MAX_TEMPERATURE_PREVIEW_DURATION;
 }
 
 static int32_t prv_floor_to_step(const int32_t value, const int32_t step)
@@ -300,6 +313,33 @@ static void prv_load_temperature_range_auto(void)
 	s_temperature_range_auto = true;
 }
 
+static void prv_set_temperature_preview_duration(const uint32_t duration)
+{
+	if (!prv_is_valid_temperature_preview_duration(duration)) {
+		return;
+	}
+
+	s_temperature_preview_duration = duration;
+	persist_write_int(PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION, s_temperature_preview_duration);
+
+	if (s_temperature_preview_timer != NULL) {
+		app_timer_reschedule(s_temperature_preview_timer, s_temperature_preview_duration * 1000);
+	}
+}
+
+static void prv_load_temperature_preview_duration(void)
+{
+	if (persist_exists(PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION)) {
+		const uint32_t persisted_duration = persist_read_int(PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION);
+		if (prv_is_valid_temperature_preview_duration(persisted_duration)) {
+			s_temperature_preview_duration = persisted_duration;
+			return;
+		}
+	}
+
+	s_temperature_preview_duration = DEFAULT_TEMPERATURE_PREVIEW_DURATION;
+}
+
 static void prv_set_show_aux_gauges(const bool show_aux_gauges)
 {
 	s_show_aux_gauges = show_aux_gauges;
@@ -335,6 +375,9 @@ static void prv_set_weather(const int32_t temperature, const int32_t temperature
 
 	if (s_weather_layer != NULL) {
 		layer_mark_dirty(s_weather_layer);
+	}
+	if (s_show_temperature_preview) {
+		prv_mark_progress_dirty();
 	}
 }
 
@@ -401,9 +444,33 @@ static void prv_battery_state_handler(BatteryChargeState charge_state)
 	prv_mark_battery_dirty();
 }
 
+static void prv_temperature_preview_timer_handler(void * data)
+{
+	(void) data;
+
+	s_temperature_preview_timer = NULL;
+	s_show_temperature_preview  = false;
+	prv_mark_progress_dirty();
+}
+
+static void prv_show_temperature_preview(void)
+{
+	s_show_temperature_preview = true;
+
+	if (s_temperature_preview_timer != NULL) {
+		app_timer_reschedule(s_temperature_preview_timer, s_temperature_preview_duration * 1000);
+	} else {
+		s_temperature_preview_timer = app_timer_register(s_temperature_preview_duration * 1000,
+		                                                 prv_temperature_preview_timer_handler,
+		                                                 NULL);
+	}
+
+	prv_mark_progress_dirty();
+}
+
 static void prv_refresh_display(void)
 {
-	prv_mark_progress_dirty();
+	prv_show_temperature_preview();
 	prv_mark_weather_dirty();
 	prv_mark_battery_dirty();
 	prv_request_weather();
@@ -434,6 +501,11 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	const Tuple * const weather_update_interval_tuple = dict_find(iter, APP_KEY_WEATHER_UPDATE_INTERVAL);
 	if (weather_update_interval_tuple != NULL && weather_update_interval_tuple->type == TUPLE_INT) {
 		prv_set_weather_update_interval(weather_update_interval_tuple->value->int32);
+	}
+
+	const Tuple * const temperature_preview_duration_tuple = dict_find(iter, APP_KEY_TEMPERATURE_PREVIEW_DURATION);
+	if (temperature_preview_duration_tuple != NULL && temperature_preview_duration_tuple->type == TUPLE_INT) {
+		prv_set_temperature_preview_duration(temperature_preview_duration_tuple->value->int32);
 	}
 
 	const Tuple * const show_aux_gauges_tuple = dict_find(iter, APP_KEY_SHOW_AUX_GAUGES);
@@ -558,13 +630,13 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 {
 	static char steps_text[] = "99999";
 	static char distance_text[16];
+	static char temperature_text[16];
+	static char temperature_range_text[32];
 
-	uint32_t steps = prv_get_today_steps();
+	const GRect bounds = layer_get_bounds(layer);
+	uint32_t    steps = prv_get_today_steps();
 
 	if (steps > 0U) {
-		const GRect    bounds          = layer_get_bounds(layer);
-		const uint32_t distance_meters = prv_get_today_distance_meters();
-
 		const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
 		int32_t       angle     = raw_angle;
 		int32_t       overflow_angle;
@@ -586,8 +658,41 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		prv_fill_ring_segment(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 		prv_fill_ring_arrowhead(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(-2) + angle);
 		prv_draw_ring_arrowhead(ctx, ring_rect, DEG_TO_TRIGANGLE(1) + overflow_angle);
+	}
 
-		const uint32_t display_steps = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
+	if (s_show_temperature_preview) {
+		if (s_temperature == INT32_MAX) {
+			snprintf(temperature_text, sizeof(temperature_text), "--°C");
+		} else {
+			snprintf(temperature_text, sizeof(temperature_text), "%" PRId32 "°C", s_temperature);
+		}
+		if (s_temperature_max == INT32_MAX || s_temperature_min == INT32_MAX) {
+			snprintf(temperature_range_text, sizeof(temperature_range_text), "--/--°C");
+		} else {
+			snprintf(temperature_range_text,
+			         sizeof(temperature_range_text),
+			         "%" PRId32 "/%" PRId32 "°C",
+			         s_temperature_max,
+			         s_temperature_min);
+		}
+		graphics_context_set_text_color(ctx, GColorWhite);
+		graphics_draw_text(ctx,
+		                   temperature_text,
+		                   s_steps_font,
+		                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter,
+		                   NULL);
+		graphics_draw_text(ctx,
+		                   temperature_range_text,
+		                   s_distance_font,
+		                   GRect(0, bounds.size.h / 2, bounds.size.w, 22),
+		                   GTextOverflowModeTrailingEllipsis,
+		                   GTextAlignmentCenter,
+		                   NULL);
+	} else if (steps > 0U) {
+		const uint32_t display_steps   = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
+		const uint32_t distance_meters = prv_get_today_distance_meters();
 		snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
 		snprintf(distance_text,
 		         sizeof(distance_text),
@@ -868,6 +973,11 @@ static void prv_window_load(Window * const window)
 
 static void prv_window_unload(Window * const window)
 {
+	if (s_temperature_preview_timer != NULL) {
+		app_timer_cancel(s_temperature_preview_timer);
+		s_temperature_preview_timer = NULL;
+	}
+	s_show_temperature_preview = false;
 	accel_tap_service_unsubscribe();
 	battery_state_service_unsubscribe();
 	tick_timer_service_unsubscribe();
@@ -889,6 +999,7 @@ static void prv_init(void)
 	prv_load_weather_update_interval();
 	prv_load_temperature_display_range();
 	prv_load_temperature_range_auto();
+	prv_load_temperature_preview_duration();
 	prv_load_show_aux_gauges();
 	prv_load_weather();
 

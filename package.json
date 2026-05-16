@@ -37,7 +37,8 @@
       "TEMPERATURE_DISPLAY_MAX",
       "TEMPERATURE_DISPLAY_MIN",
       "SHOW_AUX_GAUGES",
-      "TEMPERATURE_RANGE_AUTO"
+      "TEMPERATURE_RANGE_AUTO",
+      "TEMPERATURE_PREVIEW_DURATION"
     ],
     "resources": {
         "media": [
@@ -60,13 +61,13 @@
                 "type": "font"
             },
             {
-                "characterRegex": "[0-9]",
+                "characterRegex": "[-0-9C°]",
                 "file": "fonts/Outfit-SemiBold.ttf",
                 "name": "FONT_ISO_STEPS_20",
                 "type": "font"
             },
             {
-                "characterRegex": "[0-9.km]",
+                "characterRegex": "[-/0-9.Ckm°]",
                 "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_DISTANCE_16",
                 "type": "font"
