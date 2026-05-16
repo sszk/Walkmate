@@ -16,8 +16,8 @@ const TEMPERATURE_DISPLAY_MAX_STORAGE_KEY = "walkmate.temperatureDisplayMax";
 const TEMPERATURE_DISPLAY_MIN_STORAGE_KEY = "walkmate.temperatureDisplayMin";
 const TEMPERATURE_RANGE_AUTO_STORAGE_KEY = "walkmate.temperatureRangeAuto";
 const DEFAULT_TEMPERATURE_PREVIEW_DURATION = 5;
-const MIN_TEMPERATURE_PREVIEW_DURATION = 1;
-const MAX_TEMPERATURE_PREVIEW_DURATION = 30;
+const MIN_TEMPERATURE_PREVIEW_DURATION = 0;
+const MAX_TEMPERATURE_PREVIEW_DURATION = 10;
 const TEMPERATURE_PREVIEW_DURATION_STORAGE_KEY = "walkmate.temperaturePreviewDuration";
 const SHOW_AUX_GAUGES_STORAGE_KEY = "walkmate.showAuxGauges";
 const WEATHER_API_BASE_URL = "https://api.open-meteo.com/v1/forecast";
@@ -269,6 +269,21 @@ function buildConfigUrl() {
       input:disabled {
         opacity: 0.55;
       }
+      input[type="range"] {
+        height: 44px;
+        padding: 0;
+      }
+      .range-header {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .range-value {
+        color: #c7c7c7;
+        font-size: 14px;
+        white-space: nowrap;
+      }
       .section {
         margin-top: 24px;
       }
@@ -362,9 +377,12 @@ function buildConfigUrl() {
       <input id="weather-update-interval" type="number" inputmode="numeric" min="${MIN_WEATHER_UPDATE_INTERVAL}" max="${MAX_WEATHER_UPDATE_INTERVAL}" value="${initialWeatherUpdateInterval}">
     </div>
     <div class="section">
-      <p>Choose how long temperature details stay visible after a tap, in seconds.</p>
-      <label for="temperature-preview-duration">Temperature Display Duration</label>
-      <input id="temperature-preview-duration" type="number" inputmode="numeric" min="${MIN_TEMPERATURE_PREVIEW_DURATION}" max="${MAX_TEMPERATURE_PREVIEW_DURATION}" value="${initialTemperaturePreviewDuration}">
+      <p>Choose how long temperature details stay visible after a tap. Set to 0 to disable tap temperature display.</p>
+      <div class="range-header">
+        <label for="temperature-preview-duration">Temperature Display Duration</label>
+        <span id="temperature-preview-duration-value" class="range-value"></span>
+      </div>
+      <input id="temperature-preview-duration" type="range" min="${MIN_TEMPERATURE_PREVIEW_DURATION}" max="${MAX_TEMPERATURE_PREVIEW_DURATION}" step="1" value="${initialTemperaturePreviewDuration}">
     </div>
     <div class="section">
       <label class="toggle-option">
@@ -408,12 +426,19 @@ function buildConfigUrl() {
         var temperatureRangeAutoInput = document.getElementById('temperature-range-auto');
         var temperatureDisplayMinInput = document.getElementById('temperature-display-min');
         var temperatureDisplayMaxInput = document.getElementById('temperature-display-max');
+        var temperaturePreviewDurationValue = document.getElementById('temperature-preview-duration-value');
         var error = document.getElementById('error');
+        function updateTemperaturePreviewDurationValue() {
+          var duration = parseInt(temperaturePreviewDurationInput.value, 10);
+          temperaturePreviewDurationValue.textContent = duration === 0 ? 'Off' : duration + ' sec';
+        }
         function updateTemperatureRangeInputs() {
           temperatureDisplayMinInput.disabled = temperatureRangeAutoInput.checked;
           temperatureDisplayMaxInput.disabled = temperatureRangeAutoInput.checked;
         }
+        temperaturePreviewDurationInput.addEventListener('input', updateTemperaturePreviewDurationValue);
         temperatureRangeAutoInput.addEventListener('change', updateTemperatureRangeInputs);
+        updateTemperaturePreviewDurationValue();
         updateTemperatureRangeInputs();
         document.getElementById('save').addEventListener('click', function () {
           var stepGoal = parseInt(stepInput.value, 10);

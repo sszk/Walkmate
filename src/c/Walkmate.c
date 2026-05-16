@@ -61,8 +61,8 @@ enum {
 	MAX_WEATHER_UPDATE_INTERVAL          = 180,
 	MIN_TEMPERATURE_DISPLAY              = -50,
 	MAX_TEMPERATURE_DISPLAY              = 60,
-	MIN_TEMPERATURE_PREVIEW_DURATION     = 1,
-	MAX_TEMPERATURE_PREVIEW_DURATION     = 30,
+	MIN_TEMPERATURE_PREVIEW_DURATION     = 0,
+	MAX_TEMPERATURE_PREVIEW_DURATION     = 10,
 	MAX_STEP_DISPLAY                     = 99999,
 	ARROWHEAD_ANGLE_OFFSET               = 12,
 	MIN_ANGLE_DISPLAY_TEMP               = DEG_TO_TRIGANGLE(30),
@@ -157,7 +157,7 @@ static bool prv_is_valid_temperature_display_range(const int32_t display_max, co
 
 static bool prv_is_valid_temperature_preview_duration(const uint32_t duration)
 {
-	return duration >= MIN_TEMPERATURE_PREVIEW_DURATION && duration <= MAX_TEMPERATURE_PREVIEW_DURATION;
+	return duration <= MAX_TEMPERATURE_PREVIEW_DURATION;
 }
 
 static int32_t prv_floor_to_step(const int32_t value, const int32_t step)
@@ -323,7 +323,17 @@ static void prv_set_temperature_preview_duration(const uint32_t duration)
 	persist_write_int(PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION, s_temperature_preview_duration);
 
 	if (s_temperature_preview_timer != NULL) {
-		app_timer_reschedule(s_temperature_preview_timer, s_temperature_preview_duration * 1000);
+		if (s_temperature_preview_duration == 0) {
+			app_timer_cancel(s_temperature_preview_timer);
+			s_temperature_preview_timer = NULL;
+		} else {
+			app_timer_reschedule(s_temperature_preview_timer, s_temperature_preview_duration * 1000);
+		}
+	}
+
+	if (s_temperature_preview_duration == 0 && s_show_temperature_preview) {
+		s_show_temperature_preview = false;
+		prv_mark_progress_dirty();
 	}
 }
 
@@ -455,6 +465,10 @@ static void prv_temperature_preview_timer_handler(void * data)
 
 static void prv_show_temperature_preview(void)
 {
+	if (s_temperature_preview_duration == 0) {
+		return;
+	}
+
 	s_show_temperature_preview = true;
 
 	if (s_temperature_preview_timer != NULL) {
