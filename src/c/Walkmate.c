@@ -26,20 +26,20 @@ static GFont       s_steps_font;
 static GFont       s_distance_font;
 
 enum {
-	APP_KEY_STEP_GOAL               = 10000,
-	APP_KEY_RING_COLOR              = 10001,
-	APP_KEY_WEATHER_UPDATE_INTERVAL = 10002,
-	APP_KEY_WEATHER_REQUEST         = 10003,
-	APP_KEY_WEATHER_TEMPERATURE     = 10004,
-	APP_KEY_WEATHER_TEMPERATURE_MAX = 10005,
-	APP_KEY_WEATHER_TEMPERATURE_MIN = 10006,
-	APP_KEY_TEMPERATURE_DISPLAY_MAX = 10007,
-	APP_KEY_TEMPERATURE_DISPLAY_MIN = 10008,
-	APP_KEY_SHOW_AUX_GAUGES         = 10009,
+	APP_KEY_STEP_GOAL                    = 10000,
+	APP_KEY_RING_COLOR                   = 10001,
+	APP_KEY_WEATHER_UPDATE_INTERVAL      = 10002,
+	APP_KEY_WEATHER_REQUEST              = 10003,
+	APP_KEY_WEATHER_TEMPERATURE          = 10004,
+	APP_KEY_WEATHER_TEMPERATURE_MAX      = 10005,
+	APP_KEY_WEATHER_TEMPERATURE_MIN      = 10006,
+	APP_KEY_TEMPERATURE_DISPLAY_MAX      = 10007,
+	APP_KEY_TEMPERATURE_DISPLAY_MIN      = 10008,
+	APP_KEY_SHOW_AUX_GAUGES              = 10009,
 	APP_KEY_TEMPERATURE_RANGE_AUTO       = 10010,
 	APP_KEY_TEMPERATURE_PREVIEW_DURATION = 10011,
-	PERSIST_KEY_STEP_GOAL           = 1,
-	PERSIST_KEY_RING_COLOR          = 2,
+	PERSIST_KEY_STEP_GOAL                = 1,
+	PERSIST_KEY_RING_COLOR               = 2,
 	PERSIST_KEY_WEATHER_UPDATE_INTERVAL,
 	PERSIST_KEY_WEATHER_TEMPERATURE,
 	PERSIST_KEY_WEATHER_TEMPERATURE_MAX,
@@ -49,9 +49,9 @@ enum {
 	PERSIST_KEY_SHOW_AUX_GAUGES,
 	PERSIST_KEY_TEMPERATURE_RANGE_AUTO,
 	PERSIST_KEY_TEMPERATURE_PREVIEW_DURATION,
-	DEFAULT_STEP_GOAL               = 10000,
-	DEFAULT_RING_COLOR              = 0xFFFFFF,
-	DEFAULT_WEATHER_UPDATE_INTERVAL = 30,
+	DEFAULT_STEP_GOAL                    = 10000,
+	DEFAULT_RING_COLOR                   = 0xFFFFFF,
+	DEFAULT_WEATHER_UPDATE_INTERVAL      = 30,
 	DEFAULT_TEMPERATURE_DISPLAY_MAX      = 40,
 	DEFAULT_TEMPERATURE_DISPLAY_MIN      = -10,
 	DEFAULT_TEMPERATURE_PREVIEW_DURATION = 5,
@@ -63,6 +63,7 @@ enum {
 	MAX_TEMPERATURE_DISPLAY              = 60,
 	MIN_TEMPERATURE_PREVIEW_DURATION     = 0,
 	MAX_TEMPERATURE_PREVIEW_DURATION     = 10,
+	WEATHER_REQUEST_TIMEOUT_MS           = 30 * 1000,
 	MAX_STEP_DISPLAY                     = 99999,
 	ARROWHEAD_ANGLE_OFFSET               = 12,
 	MIN_ANGLE_DISPLAY_TEMP               = DEG_TO_TRIGANGLE(30),
@@ -71,20 +72,23 @@ enum {
 	MAX_ANGLE_DISPLAY_BATTERY            = DEG_TO_TRIGANGLE(330),
 };
 
-static uint32_t      s_step_goal                          = DEFAULT_STEP_GOAL;
-static uint32_t      s_ring_color_hex                     = DEFAULT_RING_COLOR;
-static uint32_t      s_weather_update_interval            = DEFAULT_WEATHER_UPDATE_INTERVAL;
-static int32_t       s_temperature                        = INT32_MAX;
-static int32_t       s_temperature_max                    = INT32_MAX;
-static int32_t       s_temperature_min                    = INT32_MAX;
-static time_t        s_last_weather_request               = 0;
-static int32_t       s_temperature_display_max            = DEFAULT_TEMPERATURE_DISPLAY_MAX;
-static int32_t       s_temperature_display_min            = DEFAULT_TEMPERATURE_DISPLAY_MIN;
-static bool          s_temperature_range_auto             = true;
-static bool          s_show_aux_gauges                    = true;
-static uint32_t      s_temperature_preview_duration       = DEFAULT_TEMPERATURE_PREVIEW_DURATION;
-static bool          s_show_temperature_preview           = false;
+static uint32_t      s_step_goal                    = DEFAULT_STEP_GOAL;
+static uint32_t      s_ring_color_hex               = DEFAULT_RING_COLOR;
+static uint32_t      s_weather_update_interval      = DEFAULT_WEATHER_UPDATE_INTERVAL;
+static int32_t       s_temperature                  = INT32_MAX;
+static int32_t       s_temperature_max              = INT32_MAX;
+static int32_t       s_temperature_min              = INT32_MAX;
+static time_t        s_last_weather_request         = 0;
+static int32_t       s_temperature_display_max      = DEFAULT_TEMPERATURE_DISPLAY_MAX;
+static int32_t       s_temperature_display_min      = DEFAULT_TEMPERATURE_DISPLAY_MIN;
+static bool          s_temperature_range_auto       = true;
+static bool          s_show_aux_gauges              = true;
+static uint32_t      s_temperature_preview_duration = DEFAULT_TEMPERATURE_PREVIEW_DURATION;
+static bool          s_show_temperature_preview     = false;
+static bool          s_pending_temperature_preview  = false;
+static bool          s_weather_request_in_flight    = false;
 static AppTimer *    s_temperature_preview_timer;
+static AppTimer *    s_weather_request_timeout_timer;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const uint8_t s_progress_ring_width                = 16;
 static const int16_t s_progress_arrow_base_extra          = 1;
@@ -115,7 +119,9 @@ static const char month[12][4] = {
 static void prv_mark_progress_dirty(void);
 static void prv_mark_weather_dirty(void);
 static void prv_mark_battery_dirty(void);
-static void prv_request_weather(void);
+static void prv_show_temperature_preview(void);
+static bool prv_request_weather(void);
+static void prv_finish_weather_request(void);
 
 static inline char prv_num_to_digit(uint32_t n)
 {
@@ -331,9 +337,12 @@ static void prv_set_temperature_preview_duration(const uint32_t duration)
 		}
 	}
 
-	if (s_temperature_preview_duration == 0 && s_show_temperature_preview) {
-		s_show_temperature_preview = false;
-		prv_mark_progress_dirty();
+	if (s_temperature_preview_duration == 0) {
+		s_pending_temperature_preview = false;
+		if (s_show_temperature_preview) {
+			s_show_temperature_preview = false;
+			prv_mark_progress_dirty();
+		}
 	}
 }
 
@@ -375,6 +384,8 @@ static void prv_load_show_aux_gauges(void)
 
 static void prv_set_weather(const int32_t temperature, const int32_t temperature_max, const int32_t temperature_min)
 {
+	prv_finish_weather_request();
+
 	s_temperature     = temperature;
 	s_temperature_max = temperature_max;
 	s_temperature_min = temperature_min;
@@ -386,7 +397,10 @@ static void prv_set_weather(const int32_t temperature, const int32_t temperature
 	if (s_weather_layer != NULL) {
 		layer_mark_dirty(s_weather_layer);
 	}
-	if (s_show_temperature_preview) {
+	if (s_pending_temperature_preview) {
+		s_pending_temperature_preview = false;
+		prv_show_temperature_preview();
+	} else if (s_show_temperature_preview) {
 		prv_mark_progress_dirty();
 	}
 }
@@ -454,6 +468,15 @@ static void prv_battery_state_handler(BatteryChargeState charge_state)
 	prv_mark_battery_dirty();
 }
 
+static void prv_weather_request_timeout_handler(void * data)
+{
+	(void) data;
+
+	s_weather_request_timeout_timer = NULL;
+	s_weather_request_in_flight     = false;
+	s_pending_temperature_preview   = false;
+}
+
 static void prv_temperature_preview_timer_handler(void * data)
 {
 	(void) data;
@@ -484,10 +507,24 @@ static void prv_show_temperature_preview(void)
 
 static void prv_refresh_display(void)
 {
-	prv_show_temperature_preview();
+	if (s_temperature_preview_duration > 0) {
+		s_pending_temperature_preview = true;
+		if (s_temperature_preview_timer != NULL) {
+			app_timer_cancel(s_temperature_preview_timer);
+			s_temperature_preview_timer = NULL;
+		}
+		if (s_show_temperature_preview) {
+			s_show_temperature_preview = false;
+			prv_mark_progress_dirty();
+		}
+	}
+
 	prv_mark_weather_dirty();
 	prv_mark_battery_dirty();
-	prv_request_weather();
+
+	if (!prv_request_weather()) {
+		s_pending_temperature_preview = false;
+	}
 }
 
 static void prv_accel_tap_handler(AccelAxisType axis, int32_t direction)
@@ -550,24 +587,43 @@ static void prv_inbox_received_handler(DictionaryIterator * const iter, void * c
 	}
 }
 
-static void prv_request_weather(void)
+static bool prv_request_weather(void)
 {
 	AppMessageResult     result;
 	DictionaryIterator * out_iter;
 
+	if (s_weather_request_in_flight) {
+		return true;
+	}
+
 	result = app_message_outbox_begin(&out_iter);
 	if (result != APP_MSG_OK || out_iter == NULL) {
-		return;
+		return false;
 	}
 
 	dict_write_uint8(out_iter, APP_KEY_WEATHER_REQUEST, 1);
 	result = app_message_outbox_send();
 	if (result != APP_MSG_OK) {
 		APP_LOG(APP_LOG_LEVEL_WARNING, "Failed to request weather: %d", result);
-		return;
+		return false;
 	}
 
-	s_last_weather_request = time(NULL);
+	s_last_weather_request          = time(NULL);
+	s_weather_request_in_flight     = true;
+	s_weather_request_timeout_timer = app_timer_register(WEATHER_REQUEST_TIMEOUT_MS,
+	                                                     prv_weather_request_timeout_handler,
+	                                                     NULL);
+	return true;
+}
+
+static void prv_finish_weather_request(void)
+{
+	s_weather_request_in_flight = false;
+
+	if (s_weather_request_timeout_timer != NULL) {
+		app_timer_cancel(s_weather_request_timeout_timer);
+		s_weather_request_timeout_timer = NULL;
+	}
 }
 
 static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const GColor color, const int32_t start_angle, const int32_t end_angle)
@@ -648,7 +704,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 	static char temperature_range_text[32];
 
 	const GRect bounds = layer_get_bounds(layer);
-	uint32_t    steps = prv_get_today_steps();
+	uint32_t    steps  = prv_get_today_steps();
 
 	if (steps > 0U) {
 		const int32_t raw_angle = (int32_t) (((uint64_t) TRIG_MAX_ANGLE * steps) / s_step_goal);
@@ -991,7 +1047,13 @@ static void prv_window_unload(Window * const window)
 		app_timer_cancel(s_temperature_preview_timer);
 		s_temperature_preview_timer = NULL;
 	}
-	s_show_temperature_preview = false;
+	if (s_weather_request_timeout_timer != NULL) {
+		app_timer_cancel(s_weather_request_timeout_timer);
+		s_weather_request_timeout_timer = NULL;
+	}
+	s_show_temperature_preview    = false;
+	s_pending_temperature_preview = false;
+	s_weather_request_in_flight   = false;
 	accel_tap_service_unsubscribe();
 	battery_state_service_unsubscribe();
 	tick_timer_service_unsubscribe();
