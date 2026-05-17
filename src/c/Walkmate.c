@@ -120,6 +120,7 @@ static void prv_mark_progress_dirty(void);
 static void prv_mark_weather_dirty(void);
 static void prv_mark_battery_dirty(void);
 static void prv_show_temperature_preview(void);
+static void prv_show_pending_temperature_preview(void);
 static bool prv_request_weather(void);
 static void prv_finish_weather_request(void);
 
@@ -398,8 +399,7 @@ static void prv_set_weather(const int32_t temperature, const int32_t temperature
 		layer_mark_dirty(s_weather_layer);
 	}
 	if (s_pending_temperature_preview) {
-		s_pending_temperature_preview = false;
-		prv_show_temperature_preview();
+		prv_show_pending_temperature_preview();
 	} else if (s_show_temperature_preview) {
 		prv_mark_progress_dirty();
 	}
@@ -474,7 +474,7 @@ static void prv_weather_request_timeout_handler(void * data)
 
 	s_weather_request_timeout_timer = NULL;
 	s_weather_request_in_flight     = false;
-	s_pending_temperature_preview   = false;
+	prv_show_pending_temperature_preview();
 }
 
 static void prv_temperature_preview_timer_handler(void * data)
@@ -505,6 +505,16 @@ static void prv_show_temperature_preview(void)
 	prv_mark_progress_dirty();
 }
 
+static void prv_show_pending_temperature_preview(void)
+{
+	if (!s_pending_temperature_preview) {
+		return;
+	}
+
+	s_pending_temperature_preview = false;
+	prv_show_temperature_preview();
+}
+
 static void prv_refresh_display(void)
 {
 	if (s_temperature_preview_duration > 0) {
@@ -523,7 +533,7 @@ static void prv_refresh_display(void)
 	prv_mark_battery_dirty();
 
 	if (!prv_request_weather()) {
-		s_pending_temperature_preview = false;
+		prv_show_pending_temperature_preview();
 	}
 }
 
