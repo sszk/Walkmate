@@ -25,6 +25,22 @@ static GFont       s_time_font;
 static GFont       s_steps_font;
 static GFont       s_distance_font;
 
+typedef struct {
+	uint32_t date_font_resource_id;
+	uint32_t time_font_resource_id;
+	uint32_t steps_font_resource_id;
+	uint32_t distance_font_resource_id;
+	int16_t  date_layer_h;
+	int16_t  time_layer_y;
+	int16_t  time_layer_h;
+	int16_t  steps_text_y_offset;
+	int16_t  steps_text_h;
+	int16_t  distance_text_y_offset;
+	int16_t  distance_text_h;
+} LayoutProfile;
+
+static const LayoutProfile * s_layout;
+
 enum {
 	APP_KEY_STEP_GOAL                    = 10000,
 	APP_KEY_RING_COLOR                   = 10001,
@@ -116,6 +132,58 @@ static void prv_show_temperature_preview(void);
 static void prv_show_pending_temperature_preview(void);
 static bool prv_request_weather(void);
 static void prv_finish_weather_request(void);
+
+static const LayoutProfile * prv_select_layout_profile(const GSize window_size)
+{
+	static const LayoutProfile small = {
+		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_23,
+		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_32,
+		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_20,
+		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_16,
+		.date_layer_h              = 27,
+		.time_layer_y              = 25,
+		.time_layer_h              = 36,
+		.steps_text_y_offset       = -18,
+		.steps_text_h              = 26,
+		.distance_text_y_offset    = 0,
+		.distance_text_h           = 22,
+	};
+	static const LayoutProfile medium = {
+		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_26,
+		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_36,
+		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_24,
+		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_18,
+		.date_layer_h              = 30,
+		.time_layer_y              = 26,
+		.time_layer_h              = 39,
+		.steps_text_y_offset       = -21,
+		.steps_text_h              = 30,
+		.distance_text_y_offset    = 2,
+		.distance_text_h           = 24,
+	};
+	static const LayoutProfile large = {
+		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_30,
+		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_42,
+		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_36,
+		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_28,
+		.date_layer_h              = 35,
+		.time_layer_y              = 31,
+		.time_layer_h              = 47,
+		.steps_text_y_offset       = -34,
+		.steps_text_h              = 35,
+		.distance_text_y_offset    = -2,
+		.distance_text_h           = 28,
+	};
+
+	if (window_size.w >= 200) {
+		return &large;
+	}
+	if (window_size.w >= 180) {
+		return &medium;
+	}
+
+	return &small;
+}
 
 static inline char prv_num_to_digit(uint32_t n)
 {
@@ -754,14 +822,14 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		graphics_draw_text(ctx,
 		                   temperature_text,
 		                   s_steps_font,
-		                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
+		                   GRect(0, bounds.size.h / 2 + s_layout->steps_text_y_offset, bounds.size.w, s_layout->steps_text_h),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
 		graphics_draw_text(ctx,
 		                   temperature_range_text,
 		                   s_distance_font,
-		                   GRect(0, bounds.size.h / 2, bounds.size.w, 22),
+		                   GRect(0, bounds.size.h / 2 + s_layout->distance_text_y_offset, bounds.size.w, s_layout->distance_text_h),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
@@ -778,14 +846,14 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		graphics_draw_text(ctx,
 		                   steps_text,
 		                   s_steps_font,
-		                   GRect(0, bounds.size.h / 2 - 18, bounds.size.w, 26),
+		                   GRect(0, bounds.size.h / 2 + s_layout->steps_text_y_offset, bounds.size.w, s_layout->steps_text_h),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
 		graphics_draw_text(ctx,
 		                   distance_text,
 		                   s_distance_font,
-		                   GRect(0, bounds.size.h / 2, bounds.size.w, 22),
+		                   GRect(0, bounds.size.h / 2 + s_layout->distance_text_y_offset, bounds.size.w, s_layout->distance_text_h),
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
@@ -1024,12 +1092,13 @@ static void prv_window_load(Window * const window)
 
 	window_set_background_color(window, TEXT_BG_COLOR);
 
-	s_date_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DATE_23));
-	s_time_font      = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_TIME_32));
-	s_steps_font     = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_STEPS_20));
-	s_distance_font  = fonts_load_custom_font(resource_get_handle(RESOURCE_ID_FONT_ISO_DISTANCE_16));
-	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, 27), GTextAlignmentCenter, s_date_font);
-	s_time_layer     = prv_init_text_layer(GRect(0, 25, bounds.size.w, 36), GTextAlignmentCenter, s_time_font);
+	s_layout         = prv_select_layout_profile(bounds.size);
+	s_date_font      = fonts_load_custom_font(resource_get_handle(s_layout->date_font_resource_id));
+	s_time_font      = fonts_load_custom_font(resource_get_handle(s_layout->time_font_resource_id));
+	s_steps_font     = fonts_load_custom_font(resource_get_handle(s_layout->steps_font_resource_id));
+	s_distance_font  = fonts_load_custom_font(resource_get_handle(s_layout->distance_font_resource_id));
+	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, s_layout->date_layer_h), GTextAlignmentCenter, s_date_font);
+	s_time_layer     = prv_init_text_layer(GRect(0, s_layout->time_layer_y, bounds.size.w, s_layout->time_layer_h), GTextAlignmentCenter, s_time_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_progress_layer, prv_progress_update_proc);
 	layer_add_child(window_layer, s_progress_layer);

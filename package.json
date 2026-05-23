@@ -55,9 +55,33 @@
                 "type": "font"
             },
             {
+                "characterRegex": "[0-9/ADFJMNOSabceglnoprtuvy]",
+                "file": "fonts/Outfit-SemiBold.ttf",
+                "name": "FONT_ISO_DATE_26",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[0-9/ADFJMNOSabceglnoprtuvy]",
+                "file": "fonts/Outfit-SemiBold.ttf",
+                "name": "FONT_ISO_DATE_30",
+                "type": "font"
+            },
+            {
                 "characterRegex": "[0-9:apm]",
                 "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_TIME_32",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[0-9:apm]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_TIME_36",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[0-9:apm]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_TIME_42",
                 "type": "font"
             },
             {
@@ -67,9 +91,33 @@
                 "type": "font"
             },
             {
+                "characterRegex": "[-0-9C°]",
+                "file": "fonts/Outfit-SemiBold.ttf",
+                "name": "FONT_ISO_STEPS_24",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[-0-9C°]",
+                "file": "fonts/Outfit-SemiBold.ttf",
+                "name": "FONT_ISO_STEPS_36",
+                "type": "font"
+            },
+            {
                 "characterRegex": "[-/0-9.Ckm°]",
                 "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_DISTANCE_16",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[-/0-9.Ckm°]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_DISTANCE_18",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[-/0-9.Ckm°]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_DISTANCE_28",
                 "type": "font"
             }
         ]
