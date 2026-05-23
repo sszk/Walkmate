@@ -2,21 +2,22 @@
 
 Walkmate is a Pebble watch face for daily walking progress.
 
-It shows the current date and time, today's step count, walking distance, a progress ring for your daily step goal, and optional temperature and battery gauges.
+It shows the current date and time, today's step count, walked distance, a progress ring for your daily step goal, and optional temperature and battery gauges.
 
 ## Features
 
 - Date display in `MMM/D` or `MMM/DD` format
 - Time display using the watch's 12-hour or 24-hour setting
-- Today's step count from Pebble Health
-- Today's walked distance in kilometers
+- Today's step count from Pebble Health, capped at `99999` in the center display
+- Today's walked distance from Pebble Health, shown in kilometers with one decimal place
 - Circular progress ring based on a configurable daily step goal
 - Overflow indicator when the step goal is exceeded
 - Configurable progress ring color
+- Layout and font sizes selected automatically for small, medium, and large Pebble displays
 - Optional auxiliary gauges:
-  - Weather temperature gauge using current, daily high, and daily low temperatures
-  - Battery gauge using the watch battery level
-- Tap-to-refresh weather with a temporary center temperature display
+  - Upper weather temperature gauge using current, daily high, and daily low temperatures
+  - Lower battery gauge using the watch battery level, with charging state highlighted
+- Tap-to-refresh weather with a temporary center temperature display (`current` and `high/low`)
 - Phone-side configuration page
 - Persistent settings on both the watch and phone side
 
@@ -25,10 +26,12 @@ It shows the current date and time, today's step count, walking distance, a prog
 Walkmate requests weather data from the phone through PebbleKit JS.
 
 - The phone obtains the current location with `navigator.geolocation`.
-- Weather data is fetched from the Open-Meteo forecast API.
+- Weather data is fetched from the Open-Meteo forecast API using current `temperature_2m` and daily `temperature_2m_max` / `temperature_2m_min`.
+- Temperatures are rounded to whole degrees Celsius before they are sent to the watch.
 - The watch stores the latest received temperature values and redraws the temperature gauge from them.
-- The refresh interval is configurable.
-- Tapping the watch requests fresh weather data and temporarily replaces the center step display with current, high, and low temperatures.
+- Weather is requested when the watch face loads, when the configured refresh interval has elapsed, and when the watch is tapped.
+- Tapping the watch requests fresh weather data and temporarily replaces the center step display with current temperature and `high/low` temperature. If no temperature is available, the preview shows `--°C` and `--/--°C`.
+- Weather requests on the watch side time out after 30 seconds so the tap preview can still finish.
 
 Weather and battery gauges can be hidden from the configuration page.
 
@@ -46,7 +49,7 @@ Available settings:
 | Weather update interval | `30` minutes | `5` to `180` minutes |
 | Temperature display duration | `5` seconds | `0` to `10` seconds; `0` disables tap temperature display |
 | Show temperature and battery gauges | On | On / Off |
-| Temperature gauge range | Automatic | Manual `-50` to `60` C, or automatic from today's high/low |
+| Temperature gauge range | Automatic | Manual `-50` to `60` C, or automatic from today's high/low with padding |
 
 ## Project Structure
 
@@ -69,7 +72,7 @@ Available settings:
   - Emery
   - Flint
   - Gabbro
-- Pebble Health support for step count and walked distance
+- Pebble Health support for step count and walked distance. If health data is unavailable, step and distance values are treated as `0`.
 - Phone location permission for weather updates
 
 ## Build
@@ -110,15 +113,16 @@ Walkmate は、日々のウォーキング進捗を表示する Pebble 向けウ
 
 - `MMM/D` または `MMM/DD` 形式の日付表示
 - ウォッチ本体の設定に合わせた 12 時間 / 24 時間表示
-- Pebble Health から取得した今日の歩数
-- 今日の歩行距離を km 表示
+- Pebble Health から取得した今日の歩数。中央表示では `99999` が上限です
+- Pebble Health から取得した今日の歩行距離を、小数 1 桁の km で表示
 - 設定可能な目標歩数に基づく円形進捗リング
 - 目標歩数を超えた場合のオーバーフロー表示
 - 進捗リング色の設定
+- Pebble の画面サイズに応じた小 / 中 / 大レイアウトとフォントサイズの自動選択
 - 任意表示の補助ゲージ:
-  - 現在気温、最高気温、最低気温を使った気温ゲージ
-  - ウォッチのバッテリー残量ゲージ
-- タップによる天気更新と、一時的な中央気温表示
+  - 現在気温、最高気温、最低気温を使った上側の気温ゲージ
+  - 充電状態も反映する下側のバッテリー残量ゲージ
+- タップによる天気更新と、一時的な中央気温表示（現在気温と最高/最低気温）
 - スマートフォン側の設定画面
 - ウォッチ側とスマートフォン側の設定永続化
 
@@ -127,10 +131,12 @@ Walkmate は、日々のウォーキング進捗を表示する Pebble 向けウ
 Walkmate は PebbleKit JS 経由でスマートフォンに天気データを要求します。
 
 - スマートフォン側で `navigator.geolocation` を使って現在地を取得します。
-- Open-Meteo forecast API から天気データを取得します。
+- Open-Meteo forecast API から、現在の `temperature_2m` と日別の `temperature_2m_max` / `temperature_2m_min` を取得します。
+- 気温は整数の摂氏に丸めてからウォッチへ送信します。
 - ウォッチ側は受け取った気温値を保存し、その値を使って気温ゲージを再描画します。
-- 更新間隔は設定画面から変更できます。
-- ウォッチをタップすると天気データを更新し、中央の歩数表示を一時的に現在気温、最高気温、最低気温の表示へ切り替えます。
+- ウォッチフェイス読み込み時、設定した更新間隔の経過時、ウォッチのタップ時に天気データを要求します。
+- ウォッチをタップすると天気データを更新し、中央の歩数表示を一時的に現在気温と最高/最低気温の表示へ切り替えます。気温が未取得の場合は `--°C` と `--/--°C` を表示します。
+- ウォッチ側の天気リクエストは 30 秒でタイムアウトし、タップ時プレビューの待機を終了します。
 
 気温ゲージとバッテリーゲージは、設定画面から非表示にできます。
 
@@ -148,7 +154,7 @@ Pebble モバイルアプリからウォッチフェイスの設定を開きま�
 | 天気更新間隔 | `30` 分 | `5` から `180` 分 |
 | 気温表示時間 | `5` 秒 | `0` から `10` 秒。`0` でタップ時の気温表示を無効化 |
 | 気温・バッテリーゲージ表示 | オン | オン / オフ |
-| 気温ゲージ範囲 | 自動 | 手動では `-50` から `60` C、または今日の最高/最低気温から自動設定 |
+| 気温ゲージ範囲 | 自動 | 手動では `-50` から `60` C、または今日の最高/最低気温から余白付きで自動設定 |
 
 ## プロジェクト構成
 
@@ -171,7 +177,7 @@ Pebble モバイルアプリからウォッチフェイスの設定を開きま�
   - Emery
   - Flint
   - Gabbro
-- 歩数と歩行距離を取得するための Pebble Health
+- 歩数と歩行距離を取得するための Pebble Health。利用できない場合、歩数と距離は `0` として扱われます
 - 天気更新に使うスマートフォン側の位置情報権限
 
 ## ビルド
