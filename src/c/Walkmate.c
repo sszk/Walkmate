@@ -167,7 +167,7 @@ static const LayoutProfile * prv_select_layout_profile(const GSize window_size)
 		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_36,
 		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_28,
 		.date_layer_h              = 35,
-		.time_layer_y              = 31,
+		.time_layer_y              = 28,
 		.time_layer_h              = 47,
 		.steps_text_y_offset       = -34,
 		.steps_text_h              = 35,
@@ -1097,8 +1097,8 @@ static void prv_window_load(Window * const window)
 	s_time_font      = fonts_load_custom_font(resource_get_handle(s_layout->time_font_resource_id));
 	s_steps_font     = fonts_load_custom_font(resource_get_handle(s_layout->steps_font_resource_id));
 	s_distance_font  = fonts_load_custom_font(resource_get_handle(s_layout->distance_font_resource_id));
-	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, s_layout->date_layer_h), GTextAlignmentCenter, s_date_font);
 	s_time_layer     = prv_init_text_layer(GRect(0, s_layout->time_layer_y, bounds.size.w, s_layout->time_layer_h), GTextAlignmentCenter, s_time_font);
+	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, s_layout->date_layer_h), GTextAlignmentCenter, s_date_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_progress_layer, prv_progress_update_proc);
 	layer_add_child(window_layer, s_progress_layer);
