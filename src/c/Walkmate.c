@@ -20,6 +20,7 @@ static TextLayer * s_time_layer;
 static Layer *     s_progress_layer;
 static Layer *     s_weather_layer;
 static Layer *     s_battery_layer;
+static Layer *     s_bluetooth_layer;
 static GFont       s_date_font;
 static GFont       s_time_font;
 static GFont       s_steps_font;
@@ -128,6 +129,7 @@ static const char month[12][4] = {
 static void prv_mark_progress_dirty(void);
 static void prv_mark_weather_dirty(void);
 static void prv_mark_battery_dirty(void);
+static void prv_bluetooth_connection_handler(bool connected);
 static void prv_show_temperature_preview(void);
 static void prv_show_pending_temperature_preview(void);
 static bool prv_request_weather(void);
@@ -527,6 +529,13 @@ static void prv_battery_state_handler(BatteryChargeState charge_state)
 	(void) charge_state;
 
 	prv_mark_battery_dirty();
+}
+
+static void prv_bluetooth_connection_handler(const bool connected)
+{
+	if (s_bluetooth_layer != NULL) {
+		layer_set_hidden(s_bluetooth_layer, connected);
+	}
 }
 
 static void prv_weather_request_timeout_handler(void * data)
@@ -1007,6 +1016,24 @@ static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 	}
 }
 
+static void prv_bluetooth_update_proc(Layer * const layer, GContext * const ctx)
+{
+	const GRect bounds = layer_get_bounds(layer);
+#ifdef PBL_ROUND
+	const GPoint origin = GPoint(bounds.size.w - 40, 24);
+#else
+	const GPoint origin = GPoint(bounds.size.w - 15, 6);
+#endif
+
+	graphics_context_set_stroke_color(ctx, GColorWhite);
+	graphics_context_set_stroke_width(ctx, 2);
+	graphics_draw_line(ctx, GPoint(origin.x + 5, origin.y), GPoint(origin.x + 5, origin.y + 16));
+	graphics_draw_line(ctx, GPoint(origin.x + 5, origin.y), GPoint(origin.x + 10, origin.y + 5));
+	graphics_draw_line(ctx, GPoint(origin.x + 10, origin.y + 5), GPoint(origin.x + 1, origin.y + 12));
+	graphics_draw_line(ctx, GPoint(origin.x + 5, origin.y + 16), GPoint(origin.x + 10, origin.y + 11));
+	graphics_draw_line(ctx, GPoint(origin.x + 10, origin.y + 11), GPoint(origin.x + 1, origin.y + 4));
+}
+
 static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 {
 	static char date_text[] = "MMM/99";
@@ -1062,6 +1089,7 @@ static void prv_tick_handler(struct tm * tick_time, TimeUnits units_changed)
 
 	text_layer_set_text(s_time_layer, time_text);
 	prv_mark_progress_dirty();
+	prv_bluetooth_connection_handler(bluetooth_connection_service_peek());
 
 	if (s_last_weather_request == 0 || time(NULL) - s_last_weather_request >= (time_t) (s_weather_update_interval * 60)) {
 		prv_request_weather();
@@ -1108,6 +1136,10 @@ static void prv_window_load(Window * const window)
 	s_battery_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
 	layer_set_update_proc(s_battery_layer, prv_battery_update_proc);
 	layer_add_child(window_layer, s_battery_layer);
+	s_bluetooth_layer = layer_create(bounds);
+	layer_set_update_proc(s_bluetooth_layer, prv_bluetooth_update_proc);
+	layer_set_hidden(s_bluetooth_layer, bluetooth_connection_service_peek());
+	layer_add_child(window_layer, s_bluetooth_layer);
 
 	// Get a tm structure
 	time_t      temp      = time(NULL);
@@ -1119,6 +1151,7 @@ static void prv_window_load(Window * const window)
 	// Subscribe to tick timer service
 	tick_timer_service_subscribe(MINUTE_UNIT, prv_tick_handler);
 	battery_state_service_subscribe(prv_battery_state_handler);
+	bluetooth_connection_service_subscribe(prv_bluetooth_connection_handler);
 	accel_tap_service_subscribe(prv_accel_tap_handler);
 }
 
@@ -1136,11 +1169,13 @@ static void prv_window_unload(Window * const window)
 	s_pending_temperature_preview = false;
 	s_weather_request_in_flight   = false;
 	accel_tap_service_unsubscribe();
+	bluetooth_connection_service_unsubscribe();
 	battery_state_service_unsubscribe();
 	tick_timer_service_unsubscribe();
 	layer_destroy(s_progress_layer);
 	layer_destroy(s_weather_layer);
 	layer_destroy(s_battery_layer);
+	layer_destroy(s_bluetooth_layer);
 	text_layer_destroy(s_date_layer);
 	text_layer_destroy(s_time_layer);
 	fonts_unload_custom_font(s_date_font);
