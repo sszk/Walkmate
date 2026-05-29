@@ -16,7 +16,9 @@ It shows the current date and time, today's step count, walked distance, a progr
 - Layout and font sizes selected automatically for small, medium, and large Pebble displays
 - Optional auxiliary gauges:
   - Upper weather temperature gauge using current, daily high, and daily low temperatures
-  - Lower battery gauge using the watch battery level, with charging state highlighted
+  - Lower battery gauge using the watch battery level
+  - On color watches, the temperature gauge is split by temperature bands and the battery gauge is colored by remaining charge
+  - On monochrome watches, auxiliary gauges use the original white/dark gray rendering, including charging-state highlighting for the battery gauge
 - Tap-to-refresh weather with a temporary center temperature display (`current` and `high/low`)
 - Phone-side configuration page
 - Persistent settings on both the watch and phone side
@@ -29,11 +31,14 @@ Walkmate requests weather data from the phone through PebbleKit JS.
 - Weather data is fetched from the Open-Meteo forecast API using current `temperature_2m` and daily `temperature_2m_max` / `temperature_2m_min`.
 - Temperatures are rounded to whole degrees Celsius before they are sent to the watch.
 - The watch stores the latest received temperature values and redraws the temperature gauge from them.
+- On color watches, the temperature range is split into colored bands: dark blue at `-5` C or below, light blue up to `5` C, green up to `15` C, yellow up to `25` C, orange up to `35` C, and red above `35` C. The current temperature marker remains white.
 - Weather is requested when the watch face loads, when the configured refresh interval has elapsed, and when the watch is tapped.
 - Tapping the watch requests fresh weather data and temporarily replaces the center step display with current temperature and `high/low` temperature. If no temperature is available, the preview shows `--°C` and `--/--°C`.
 - Weather requests on the watch side time out after 30 seconds so the tap preview can still finish.
 
 Weather and battery gauges can be hidden from the configuration page.
+
+On color watches, the battery gauge is green at `50%` or above, yellow from `20%` to `49%`, and red below `20%`.
 
 ## Configuration
 
@@ -121,7 +126,9 @@ Walkmate は、日々のウォーキング進捗を表示する Pebble 向けウ
 - Pebble の画面サイズに応じた小 / 中 / 大レイアウトとフォントサイズの自動選択
 - 任意表示の補助ゲージ:
   - 現在気温、最高気温、最低気温を使った上側の気温ゲージ
-  - 充電状態も反映する下側のバッテリー残量ゲージ
+  - ウォッチのバッテリー残量を使った下側のバッテリー残量ゲージ
+  - カラーウォッチでは、気温ゲージを温度帯ごとに色分けし、バッテリーゲージを残量ごとに色分けします
+  - モノクロウォッチでは、補助ゲージは従来の白 / 濃灰表示を使い、バッテリーゲージでは充電状態も反映します
 - タップによる天気更新と、一時的な中央気温表示（現在気温と最高/最低気温）
 - スマートフォン側の設定画面
 - ウォッチ側とスマートフォン側の設定永続化
@@ -134,11 +141,14 @@ Walkmate は PebbleKit JS 経由でスマートフォンに天気データを要
 - Open-Meteo forecast API から、現在の `temperature_2m` と日別の `temperature_2m_max` / `temperature_2m_min` を取得します。
 - 気温は整数の摂氏に丸めてからウォッチへ送信します。
 - ウォッチ側は受け取った気温値を保存し、その値を使って気温ゲージを再描画します。
+- カラーウォッチでは、気温の範囲を温度帯ごとに分割して描画します。`-5` C 以下は濃い青、`5` C 以下は水色、`15` C 以下は緑、`25` C 以下は黄色、`35` C 以下はオレンジ、それ以上は赤です。現在気温のマーカーは白のままです。
 - ウォッチフェイス読み込み時、設定した更新間隔の経過時、ウォッチのタップ時に天気データを要求します。
 - ウォッチをタップすると天気データを更新し、中央の歩数表示を一時的に現在気温と最高/最低気温の表示へ切り替えます。気温が未取得の場合は `--°C` と `--/--°C` を表示します。
 - ウォッチ側の天気リクエストは 30 秒でタイムアウトし、タップ時プレビューの待機を終了します。
 
 気温ゲージとバッテリーゲージは、設定画面から非表示にできます。
+
+カラーウォッチでは、バッテリーゲージは `50%` 以上で緑、`20%` から `49%` で黄色、`20%` 未満で赤になります。
 
 ## 設定
 

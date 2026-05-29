@@ -40,6 +40,12 @@ typedef struct {
 	int16_t  distance_text_h;
 } LayoutProfile;
 
+typedef struct {
+	int32_t  min;
+	int32_t  max;
+	uint32_t color_hex;
+} TemperatureGaugeBand;
+
 static const LayoutProfile * s_layout;
 
 enum {
@@ -915,6 +921,41 @@ static int32_t prv_weather_calc_temperature_to_angle(int32_t temperature)
 	return angle;
 }
 
+static void prv_weather_fill_temperature_gauge_segments(GContext * const ctx, const GRect rect, const int16_t thickness)
+{
+#ifdef PBL_COLOR
+	static const TemperatureGaugeBand bands[] = {
+		{ INT32_MIN, -5, 0x0000AA },
+		{ -5, 5, 0x55AAFF },
+		{ 5, 15, 0x55FF55 },
+		{ 15, 25, 0xFFFF55 },
+		{ 25, 35, 0xFFAA55 },
+		{ 35, INT32_MAX, 0xFF5555 },
+	};
+
+	for (uint8_t i = 0; i < ARRAY_LENGTH(bands); i++) {
+		const int32_t segment_min = s_temperature_min > bands[i].min ? s_temperature_min : bands[i].min;
+		const int32_t segment_max = s_temperature_max < bands[i].max ? s_temperature_max : bands[i].max;
+
+		if (segment_min >= segment_max) {
+			continue;
+		}
+
+		const int32_t start_angle = prv_weather_calc_temperature_to_angle(segment_max);
+		const int32_t end_angle   = prv_weather_calc_temperature_to_angle(segment_min);
+
+		graphics_context_set_fill_color(ctx, GColorFromHEX(bands[i].color_hex));
+		graphics_fill_radial(ctx, rect, GOvalScaleModeFillCircle, thickness, start_angle, end_angle);
+	}
+#else
+	const int32_t start_angle = prv_weather_calc_temperature_to_angle(s_temperature_max);
+	const int32_t end_angle   = prv_weather_calc_temperature_to_angle(s_temperature_min);
+
+	graphics_context_set_fill_color(ctx, GColorDarkGray);
+	graphics_fill_radial(ctx, rect, GOvalScaleModeFillCircle, thickness, start_angle, end_angle);
+#endif
+}
+
 static bool prv_weather_has_temperature(void)
 {
 	return s_temperature != INT32_MAX && s_temperature_max != INT32_MAX && s_temperature_min != INT32_MAX;
@@ -948,11 +989,7 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 	                                                         diameter + (temperature_ring_outer_offset + temperature_ring_display_thickness) * 2,
 	                                                         diameter + (temperature_ring_outer_offset + temperature_ring_display_thickness) * 2);
 
-	const int32_t start_angle = prv_weather_calc_temperature_to_angle(s_temperature_max);
-	const int32_t end_angle   = prv_weather_calc_temperature_to_angle(s_temperature_min);
-
-	graphics_context_set_fill_color(ctx, GColorDarkGray);
-	graphics_fill_radial(ctx, temperature_ring_display_rect, GOvalScaleModeFillCircle, temperature_ring_display_thickness, start_angle, end_angle);
+	prv_weather_fill_temperature_gauge_segments(ctx, temperature_ring_display_rect, temperature_ring_display_thickness);
 
 	const int16_t temperature_display_thickness = s_progress_ring_width * 3 / 4;
 	const GRect   temperature_display_rect      = GRect((bounds.size.w - diameter) / 2 - temperature_ring_outer_offset - temperature_display_thickness,
@@ -978,6 +1015,24 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 static int32_t prv_battery_calc_charge_to_angle(const uint8_t charge_percent)
 {
 	return MIN_ANGLE_DISPLAY_BATTERY + (MAX_ANGLE_DISPLAY_BATTERY - MIN_ANGLE_DISPLAY_BATTERY) * charge_percent / 100;
+}
+
+static GColor prv_battery_get_gauge_color(const BatteryChargeState charge_state)
+{
+#ifdef PBL_COLOR
+	const uint8_t charge_percent = charge_state.charge_percent;
+
+	if (charge_percent >= 50) {
+		return GColorFromHEX(0x55FF55);
+	}
+	if (charge_percent >= 20) {
+		return GColorFromHEX(0xFFFF55);
+	}
+
+	return GColorFromHEX(0xFF5555);
+#else
+	return charge_state.is_charging ? GColorWhite : GColorDarkGray;
+#endif
 }
 
 static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
@@ -1006,7 +1061,7 @@ static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 	                                                             diameter + (battery_ring_outer_offset + s_battery_display_thickness) * 2,
 	                                                             diameter + (battery_ring_outer_offset + s_battery_display_thickness) * 2);
 
-	graphics_context_set_fill_color(ctx, charge_state.is_charging ? GColorWhite : GColorDarkGray);
+	graphics_context_set_fill_color(ctx, prv_battery_get_gauge_color(charge_state));
 	graphics_fill_radial(ctx, battery_gauge_rect, GOvalScaleModeFillCircle, s_battery_display_thickness, MIN_ANGLE_DISPLAY_BATTERY, battery_angle);
 
 	for (int32_t percent = 20; percent < charge_state.charge_percent; percent += 20) {
