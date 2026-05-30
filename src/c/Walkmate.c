@@ -932,7 +932,7 @@ static void prv_weather_fill_temperature_gauge_segments(GContext * const ctx, co
 		{         0,         5, GColorCyan },
 		{         5,        10, GColorMediumAquamarine },
 		{        10,        15, GColorMalachite },
-		{        15,        20, GColorSpringBud },
+		{        15,        20, GColorBrightGreen },
 		{        20,        25, GColorIcterine },
 		{        25,        30, GColorChromeYellow },
 		{        30,        35, GColorOrange },
