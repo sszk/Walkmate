@@ -112,7 +112,7 @@ static bool          s_pending_temperature_preview  = false;
 static bool          s_weather_request_in_flight    = false;
 static AppTimer *    s_temperature_preview_timer;
 static AppTimer *    s_weather_request_timeout_timer;
-static uint8_t       s_progress_ring_width;
+static uint8_t       s_progress_ring_thickness;
 static const int16_t s_progress_ring_outer_padding        = 1;
 static const int16_t s_progress_arrow_base_extra          = 1;
 static const uint8_t s_progress_arrow_overflow_line_width = 2;
@@ -715,7 +715,7 @@ static void prv_finish_weather_request(void)
 static void prv_fill_ring_segment(GContext * const ctx, const GRect rect, const GColor color, const int32_t start_angle, const int32_t end_angle)
 {
 	graphics_context_set_fill_color(ctx, color);
-	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_width, start_angle, end_angle);
+	graphics_fill_radial(ctx, rect, GOvalScaleModeFitCircle, s_progress_ring_thickness, start_angle, end_angle);
 }
 
 static GPoint prv_gpoint_from_center_radius(const GRect rect, const int16_t radius, const int32_t angle)
@@ -731,8 +731,8 @@ static void prv_get_ring_arrowhead_points(const GRect rect, const int32_t angle,
 {
 	const int16_t base_radius  = rect.size.w / 2;
 	const int16_t outer_radius = base_radius + s_progress_arrow_base_extra;
-	const int16_t inner_radius = base_radius - s_progress_ring_width - s_progress_arrow_base_extra;
-	const int16_t mid_radius   = base_radius - (s_progress_ring_width / 2);
+	const int16_t inner_radius = base_radius - s_progress_ring_thickness - s_progress_arrow_base_extra;
+	const int16_t mid_radius   = base_radius - (s_progress_ring_thickness / 2);
 
 	points[0] = prv_gpoint_from_center_radius(rect, inner_radius, angle);
 	points[1] = prv_gpoint_from_center_radius(rect, mid_radius, angle + DEG_TO_TRIGANGLE(ARROWHEAD_ANGLE_OFFSET));
@@ -811,7 +811,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		                                 diameter - ring_inset * 2);
 		const GColor  ring_color = GColorFromHEX(s_ring_color_hex);
 
-		s_progress_ring_width = diameter / 8;
+		s_progress_ring_thickness = diameter / 8;
 
 		prv_fill_ring_segment(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(0) + angle);
 		prv_fill_ring_arrowhead(ctx, ring_rect, ring_color, DEG_TO_TRIGANGLE(-2) + angle);
@@ -925,12 +925,12 @@ static void prv_weather_fill_temperature_gauge_segments(GContext * const ctx, co
 {
 #ifdef PBL_COLOR
 	static const TemperatureGaugeBand bands[] = {
-		{ INT32_MIN, -5, 0x0000AA },
-		{ -5, 5, 0x55AAFF },
-		{ 5, 15, 0x55FF55 },
-		{ 15, 25, 0xFFFF55 },
-		{ 25, 35, 0xFFAA55 },
-		{ 35, INT32_MAX, 0xFF5555 },
+		{ INT32_MIN,        -5, 0x0000AA },
+		{        -5,         5, 0x55AAFF },
+		{         5,        15, 0x55FF55 },
+		{        15,        25, 0xFFFF55 },
+		{        25,        35, 0xFFAA55 },
+		{        35, INT32_MAX, 0xFF5555 },
 	};
 
 	for (uint8_t i = 0; i < ARRAY_LENGTH(bands); i++) {
@@ -969,13 +969,13 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 
 	const GRect   bounds                        = layer_get_bounds(layer);
 	const int16_t diameter                      = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
-	const uint8_t temperature_ring_outer_offset = s_progress_ring_width / 4;
+	const uint8_t temperature_ring_outer_offset = s_progress_ring_thickness / 4;
 	const GRect   temperature_rect              = GRect((bounds.size.w - diameter) / 2 - temperature_ring_outer_offset,
 	                                                    (bounds.size.h - diameter) / 2 - temperature_ring_outer_offset,
 	                                                    diameter + temperature_ring_outer_offset * 2,
 	                                                    diameter + temperature_ring_outer_offset * 2);
 
-	const uint8_t temperature_ring_thickness = s_progress_ring_width / 4;
+	const uint8_t temperature_ring_thickness = s_progress_ring_thickness / 4;
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, temperature_rect, GOvalScaleModeFillCircle, temperature_ring_thickness, DEG_TO_TRIGANGLE(30), DEG_TO_TRIGANGLE(150));
 
@@ -983,7 +983,7 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 		return;
 	}
 
-	const int16_t temperature_ring_display_thickness = s_progress_ring_width / 2;
+	const int16_t temperature_ring_display_thickness = s_progress_ring_thickness / 2;
 	const GRect   temperature_ring_display_rect      = GRect((bounds.size.w - diameter) / 2 - temperature_ring_outer_offset - temperature_ring_display_thickness,
 	                                                         (bounds.size.h - diameter) / 2 - temperature_ring_outer_offset - temperature_ring_display_thickness,
 	                                                         diameter + (temperature_ring_outer_offset + temperature_ring_display_thickness) * 2,
@@ -991,7 +991,7 @@ static void prv_weather_update_proc(Layer * const layer, GContext * const ctx)
 
 	prv_weather_fill_temperature_gauge_segments(ctx, temperature_ring_display_rect, temperature_ring_display_thickness);
 
-	const int16_t temperature_display_thickness = s_progress_ring_width * 3 / 4;
+	const int16_t temperature_display_thickness = s_progress_ring_thickness * 3 / 4;
 	const GRect   temperature_display_rect      = GRect((bounds.size.w - diameter) / 2 - temperature_ring_outer_offset - temperature_display_thickness,
 	                                                    (bounds.size.h - diameter) / 2 - temperature_ring_outer_offset - temperature_display_thickness,
 	                                                    diameter + (temperature_ring_outer_offset + temperature_display_thickness) * 2,
@@ -1043,19 +1043,19 @@ static void prv_battery_update_proc(Layer * const layer, GContext * const ctx)
 
 	const GRect   bounds                    = layer_get_bounds(layer);
 	const int16_t diameter                  = bounds.size.w < bounds.size.h ? bounds.size.w : bounds.size.h;
-	const int16_t battery_ring_outer_offset = s_progress_ring_width / 4;
+	const int16_t battery_ring_outer_offset = s_progress_ring_thickness / 4;
 	const GRect   battery_rect              = GRect((bounds.size.w - diameter) / 2 - battery_ring_outer_offset,
 	                                                (bounds.size.h - diameter) / 2 - battery_ring_outer_offset,
 	                                                diameter + battery_ring_outer_offset * 2,
 	                                                diameter + battery_ring_outer_offset * 2);
 
-	const uint8_t battery_ring_thickness = s_progress_ring_width / 4;
+	const uint8_t battery_ring_thickness = s_progress_ring_thickness / 4;
 	graphics_context_set_fill_color(ctx, GColorWhite);
 	graphics_fill_radial(ctx, battery_rect, GOvalScaleModeFillCircle, battery_ring_thickness, MIN_ANGLE_DISPLAY_BATTERY, MAX_ANGLE_DISPLAY_BATTERY);
 
 	const BatteryChargeState charge_state                = battery_state_service_peek();
 	const int32_t            battery_angle               = prv_battery_calc_charge_to_angle(charge_state.charge_percent);
-	const int16_t            s_battery_display_thickness = s_progress_ring_width / 2;
+	const int16_t            s_battery_display_thickness = s_progress_ring_thickness / 2;
 	const GRect              battery_gauge_rect          = GRect((bounds.size.w - diameter) / 2 - battery_ring_outer_offset - s_battery_display_thickness,
 	                                                             (bounds.size.h - diameter) / 2 - battery_ring_outer_offset - s_battery_display_thickness,
 	                                                             diameter + (battery_ring_outer_offset + s_battery_display_thickness) * 2,
