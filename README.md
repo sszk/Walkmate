@@ -31,7 +31,7 @@ Walkmate requests weather data from the phone through PebbleKit JS.
 - Weather data is fetched from the Open-Meteo forecast API using current `temperature_2m` and daily `temperature_2m_max` / `temperature_2m_min`.
 - Temperatures are rounded to whole degrees Celsius before they are sent to the watch.
 - The watch stores the latest received temperature values and redraws the temperature gauge from them.
-- On color watches, the temperature range is split into colored bands: dark blue at `-5` C or below, light blue up to `5` C, green up to `15` C, yellow up to `25` C, orange up to `35` C, and red above `35` C. The current temperature marker remains white.
+- On color watches, the temperature gauge is split into colored bands: dark blue below `-15` C, blue from `-15` C to `-5` C, cyan from `-5` C to `5` C, green from `5` C to `20` C, yellow from `20` C to `30` C, orange from `30` C to `35` C, red from `35` C to `40` C, and purple above `40` C. The current temperature marker remains white.
 - Weather is requested when the watch face loads, when the configured refresh interval has elapsed, and when the watch is tapped.
 - Tapping the watch requests fresh weather data and temporarily replaces the center step display with current temperature and `high/low` temperature. If no temperature is available, the preview shows `--°C` and `--/--°C`.
 - Weather requests on the watch side time out after 30 seconds so the tap preview can still finish.
@@ -141,7 +141,7 @@ Walkmate は PebbleKit JS 経由でスマートフォンに天気データを要
 - Open-Meteo forecast API から、現在の `temperature_2m` と日別の `temperature_2m_max` / `temperature_2m_min` を取得します。
 - 気温は整数の摂氏に丸めてからウォッチへ送信します。
 - ウォッチ側は受け取った気温値を保存し、その値を使って気温ゲージを再描画します。
-- カラーウォッチでは、気温の範囲を温度帯ごとに分割して描画します。`-5` C 以下は濃い青、`5` C 以下は水色、`15` C 以下は緑、`25` C 以下は黄色、`35` C 以下はオレンジ、それ以上は赤です。現在気温のマーカーは白のままです。
+- カラーウォッチでは、気温の範囲を温度帯ごとに色分けして描画します。`-15` C 未満は濃紺、`-15` C から `-5` C は青、`-5` C から `5` C はシアン、`5` C から `20` C は緑、`20` C から `30` C は黄色、`30` C から `35` C はオレンジ、`35` C から `40` C は赤、それ以上は紫です。現在気温のマーカーは白のままです。
 - ウォッチフェイス読み込み時、設定した更新間隔の経過時、ウォッチのタップ時に天気データを要求します。
 - ウォッチをタップすると天気データを更新し、中央の歩数表示を一時的に現在気温と最高/最低気温の表示へ切り替えます。気温が未取得の場合は `--°C` と `--/--°C` を表示します。
 - ウォッチ側の天気リクエストは 30 秒でタイムアウトし、タップ時プレビューの待機を終了します。

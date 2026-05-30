@@ -43,7 +43,7 @@ typedef struct {
 typedef struct {
 	int32_t  min;
 	int32_t  max;
-	uint32_t color_hex;
+	GColor   gcolor;
 } TemperatureGaugeBand;
 
 static const LayoutProfile * s_layout;
@@ -925,12 +925,19 @@ static void prv_weather_fill_temperature_gauge_segments(GContext * const ctx, co
 {
 #ifdef PBL_COLOR
 	static const TemperatureGaugeBand bands[] = {
-		{ INT32_MIN,        -5, 0x0000AA },
-		{        -5,         5, 0x55AAFF },
-		{         5,        15, 0x55FF55 },
-		{        15,        25, 0xFFFF55 },
-		{        25,        35, 0xFFAA55 },
-		{        35, INT32_MAX, 0xFF5555 },
+		{ INT32_MIN,       -15, GColorOxfordBlue },
+		{       -15,       -10, GColorDukeBlue },
+		{       -10,        -5, GColorBlue },
+		{        -5,         0, GColorVividCerulean },
+		{         0,         5, GColorCyan },
+		{         5,        10, GColorMediumAquamarine },
+		{        10,        15, GColorMalachite },
+		{        15,        20, GColorSpringBud },
+		{        20,        25, GColorIcterine },
+		{        25,        30, GColorChromeYellow },
+		{        30,        35, GColorOrange },
+		{        35,        40, GColorRed },
+		{        40, INT32_MAX, GColorPurple },
 	};
 
 	for (uint8_t i = 0; i < ARRAY_LENGTH(bands); i++) {
@@ -944,7 +951,7 @@ static void prv_weather_fill_temperature_gauge_segments(GContext * const ctx, co
 		const int32_t start_angle = prv_weather_calc_temperature_to_angle(segment_max);
 		const int32_t end_angle   = prv_weather_calc_temperature_to_angle(segment_min);
 
-		graphics_context_set_fill_color(ctx, GColorFromHEX(bands[i].color_hex));
+		graphics_context_set_fill_color(ctx, bands[i].gcolor);
 		graphics_fill_radial(ctx, rect, GOvalScaleModeFillCircle, thickness, start_angle, end_angle);
 	}
 #else
