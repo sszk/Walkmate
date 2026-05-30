@@ -25,6 +25,7 @@ static GFont       s_date_font;
 static GFont       s_time_font;
 static GFont       s_steps_font;
 static GFont       s_distance_font;
+static GFont       s_heart_rate_font;
 
 typedef struct {
 	uint32_t date_font_resource_id;
@@ -38,6 +39,9 @@ typedef struct {
 	int16_t  steps_text_h;
 	int16_t  distance_text_y_offset;
 	int16_t  distance_text_h;
+	uint32_t heart_rate_font_resource_id;
+	int16_t  heart_rate_text_y_offset;
+	int16_t  heart_rate_text_h;
 } LayoutProfile;
 
 typedef struct {
@@ -144,43 +148,52 @@ static void prv_finish_weather_request(void);
 static const LayoutProfile * prv_select_layout_profile(const GSize window_size)
 {
 	static const LayoutProfile small = {
-		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_23,
-		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_32,
-		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_20,
-		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_16,
-		.date_layer_h              = 27,
-		.time_layer_y              = 25,
-		.time_layer_h              = 36,
-		.steps_text_y_offset       = -18,
-		.steps_text_h              = 26,
-		.distance_text_y_offset    = 0,
-		.distance_text_h           = 22,
+		.date_font_resource_id       = RESOURCE_ID_FONT_ISO_DATE_23,
+		.time_font_resource_id       = RESOURCE_ID_FONT_ISO_TIME_32,
+		.steps_font_resource_id      = RESOURCE_ID_FONT_ISO_STEPS_20,
+		.distance_font_resource_id   = RESOURCE_ID_FONT_ISO_DISTANCE_16,
+		.heart_rate_font_resource_id = RESOURCE_ID_FONT_ISO_HEARTRATE_14,
+		.date_layer_h                = 27,
+		.time_layer_y                = 25,
+		.time_layer_h                = 36,
+		.steps_text_y_offset         = -18,
+		.steps_text_h                = 26,
+		.distance_text_y_offset      = 0,
+		.distance_text_h             = 22,
+		.heart_rate_text_y_offset    = -42,
+		.heart_rate_text_h           = 20,
 	};
 	static const LayoutProfile medium = {
-		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_26,
-		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_36,
-		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_24,
-		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_18,
-		.date_layer_h              = 30,
-		.time_layer_y              = 26,
-		.time_layer_h              = 39,
-		.steps_text_y_offset       = -21,
-		.steps_text_h              = 30,
-		.distance_text_y_offset    = 2,
-		.distance_text_h           = 24,
+		.date_font_resource_id       = RESOURCE_ID_FONT_ISO_DATE_26,
+		.time_font_resource_id       = RESOURCE_ID_FONT_ISO_TIME_36,
+		.steps_font_resource_id      = RESOURCE_ID_FONT_ISO_STEPS_24,
+		.distance_font_resource_id   = RESOURCE_ID_FONT_ISO_DISTANCE_18,
+		.heart_rate_font_resource_id = RESOURCE_ID_FONT_ISO_HEARTRATE_18,
+		.date_layer_h                = 30,
+		.time_layer_y                = 26,
+		.time_layer_h                = 39,
+		.steps_text_y_offset         = -21,
+		.steps_text_h                = 30,
+		.distance_text_y_offset      = 2,
+		.distance_text_h             = 24,
+		.heart_rate_text_y_offset    = -46,
+		.heart_rate_text_h           = 22,
 	};
 	static const LayoutProfile large = {
-		.date_font_resource_id     = RESOURCE_ID_FONT_ISO_DATE_30,
-		.time_font_resource_id     = RESOURCE_ID_FONT_ISO_TIME_42,
-		.steps_font_resource_id    = RESOURCE_ID_FONT_ISO_STEPS_36,
-		.distance_font_resource_id = RESOURCE_ID_FONT_ISO_DISTANCE_28,
-		.date_layer_h              = 35,
-		.time_layer_y              = 28,
-		.time_layer_h              = 47,
-		.steps_text_y_offset       = -34,
-		.steps_text_h              = 35,
-		.distance_text_y_offset    = -2,
-		.distance_text_h           = 28,
+		.date_font_resource_id       = RESOURCE_ID_FONT_ISO_DATE_30,
+		.time_font_resource_id       = RESOURCE_ID_FONT_ISO_TIME_42,
+		.steps_font_resource_id      = RESOURCE_ID_FONT_ISO_STEPS_36,
+		.distance_font_resource_id   = RESOURCE_ID_FONT_ISO_DISTANCE_28,
+		.heart_rate_font_resource_id = RESOURCE_ID_FONT_ISO_HEARTRATE_28,
+		.date_layer_h                = 35,
+		.time_layer_y                = 28,
+		.time_layer_h                = 47,
+		.steps_text_y_offset         = -31,
+		.steps_text_h                = 35,
+		.distance_text_y_offset      = 3,
+		.distance_text_h             = 28,
+		.heart_rate_text_y_offset    = -53,
+		.heart_rate_text_h           = 24,
 	};
 
 	if (window_size.w >= 200) {
@@ -516,6 +529,21 @@ static uint32_t prv_get_today_distance_meters(void)
 	return (uint32_t) health_service_sum_today(HealthMetricWalkedDistanceMeters);
 }
 
+static bool prv_get_current_heart_rate_bpm(uint32_t * const heart_rate)
+{
+	if (heart_rate == NULL) {
+		return false;
+	}
+
+	const int32_t value = health_service_peek_current_value(HealthMetricHeartRateBPM);
+	if (value <= 0) {
+		return false;
+	}
+
+	*heart_rate = (uint32_t) value;
+	return true;
+}
+
 static void prv_mark_progress_dirty(void)
 {
 	if (s_progress_layer != NULL) {
@@ -542,6 +570,13 @@ static void prv_bluetooth_connection_handler(const bool connected)
 	if (s_bluetooth_layer != NULL) {
 		layer_set_hidden(s_bluetooth_layer, connected);
 	}
+}
+
+static void prv_health_event_handler(HealthEventType event, void * context)
+{
+	(void) event;
+	(void) context;
+	prv_mark_progress_dirty();
 }
 
 static void prv_weather_request_timeout_handler(void * data)
@@ -848,7 +883,7 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		                   GTextOverflowModeTrailingEllipsis,
 		                   GTextAlignmentCenter,
 		                   NULL);
-	} else if (steps > 0U) {
+	} else {
 		const uint32_t display_steps   = (steps < MAX_STEP_DISPLAY) ? steps : MAX_STEP_DISPLAY;
 		const uint32_t distance_meters = prv_get_today_distance_meters();
 		snprintf(steps_text, sizeof(steps_text), "%" PRIu32, display_steps);
@@ -858,20 +893,39 @@ static void prv_progress_update_proc(Layer * const layer, GContext * const ctx)
 		         distance_meters / 1000,
 		         (distance_meters % 1000) / 100);
 		graphics_context_set_text_color(ctx, GColorWhite);
-		graphics_draw_text(ctx,
-		                   steps_text,
-		                   s_steps_font,
-		                   GRect(0, bounds.size.h / 2 + s_layout->steps_text_y_offset, bounds.size.w, s_layout->steps_text_h),
-		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentCenter,
-		                   NULL);
-		graphics_draw_text(ctx,
-		                   distance_text,
-		                   s_distance_font,
-		                   GRect(0, bounds.size.h / 2 + s_layout->distance_text_y_offset, bounds.size.w, s_layout->distance_text_h),
-		                   GTextOverflowModeTrailingEllipsis,
-		                   GTextAlignmentCenter,
-		                   NULL);
+		{
+			static char heart_rate_text[16];
+			uint32_t heart_rate;
+			if (prv_get_current_heart_rate_bpm(&heart_rate)) {
+				snprintf(heart_rate_text, sizeof(heart_rate_text), "%" PRIu32, heart_rate);
+				graphics_draw_text(ctx,
+					           heart_rate_text,
+					           s_heart_rate_font,
+					           GRect(0,
+					                 bounds.size.h / 2 + s_layout->heart_rate_text_y_offset,
+					                 bounds.size.w,
+					                 s_layout->heart_rate_text_h),
+					           GTextOverflowModeTrailingEllipsis,
+					           GTextAlignmentCenter,
+					           NULL);
+			}
+		}
+		if (steps > 0U) {
+			graphics_draw_text(ctx,
+				           steps_text,
+				           s_steps_font,
+				           GRect(0, bounds.size.h / 2 + s_layout->steps_text_y_offset, bounds.size.w, s_layout->steps_text_h),
+				           GTextOverflowModeTrailingEllipsis,
+				           GTextAlignmentCenter,
+				           NULL);
+			graphics_draw_text(ctx,
+				           distance_text,
+				           s_distance_font,
+				           GRect(0, bounds.size.h / 2 + s_layout->distance_text_y_offset, bounds.size.w, s_layout->distance_text_h),
+				           GTextOverflowModeTrailingEllipsis,
+				           GTextAlignmentCenter,
+				           NULL);
+		}
 	}
 }
 
@@ -1187,6 +1241,7 @@ static void prv_window_load(Window * const window)
 	s_time_font      = fonts_load_custom_font(resource_get_handle(s_layout->time_font_resource_id));
 	s_steps_font     = fonts_load_custom_font(resource_get_handle(s_layout->steps_font_resource_id));
 	s_distance_font  = fonts_load_custom_font(resource_get_handle(s_layout->distance_font_resource_id));
+	s_heart_rate_font = fonts_load_custom_font(resource_get_handle(s_layout->heart_rate_font_resource_id));
 	s_time_layer     = prv_init_text_layer(GRect(0, s_layout->time_layer_y, bounds.size.w, s_layout->time_layer_h), GTextAlignmentCenter, s_time_font);
 	s_date_layer     = prv_init_text_layer(GRect(0, 0, bounds.size.w, s_layout->date_layer_h), GTextAlignmentCenter, s_date_font);
 	s_progress_layer = layer_create(GRect(0, ring_top, bounds.size.w, bounds.size.h - ring_top));
@@ -1215,6 +1270,7 @@ static void prv_window_load(Window * const window)
 	battery_state_service_subscribe(prv_battery_state_handler);
 	bluetooth_connection_service_subscribe(prv_bluetooth_connection_handler);
 	accel_tap_service_subscribe(prv_accel_tap_handler);
+	health_service_events_subscribe(prv_health_event_handler, NULL);
 }
 
 static void prv_window_unload(Window * const window)
@@ -1244,6 +1300,8 @@ static void prv_window_unload(Window * const window)
 	fonts_unload_custom_font(s_time_font);
 	fonts_unload_custom_font(s_steps_font);
 	fonts_unload_custom_font(s_distance_font);
+	fonts_unload_custom_font(s_heart_rate_font);
+	health_service_events_unsubscribe();
 }
 
 static void prv_init(void)

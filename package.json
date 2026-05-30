@@ -109,6 +109,24 @@
                 "type": "font"
             },
             {
+                "characterRegex": "[0-9]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_HEARTRATE_14",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[0-9]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_HEARTRATE_18",
+                "type": "font"
+            },
+            {
+                "characterRegex": "[0-9]",
+                "file": "fonts/Outfit-Light.ttf",
+                "name": "FONT_ISO_HEARTRATE_28",
+                "type": "font"
+            },
+            {
                 "characterRegex": "[-/0-9.Ckm°]",
                 "file": "fonts/Outfit-Light.ttf",
                 "name": "FONT_ISO_DISTANCE_18",
