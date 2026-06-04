@@ -1083,14 +1083,17 @@ static GColor prv_battery_get_gauge_color(const BatteryChargeState charge_state)
 #ifdef PBL_COLOR
 	const uint8_t charge_percent = charge_state.charge_percent;
 
+	GColor color;
+
 	if (charge_percent >= 50) {
-		return GColorFromHEX(0x55FF55);
-	}
-	if (charge_percent >= 20) {
-		return GColorFromHEX(0xFFFF55);
+		color = GColorBrightGreen;
+	} else if (charge_percent >= 20) {
+		color = GColorChromeYellow;
+	} else {
+		color = GColorRed;
 	}
 
-	return GColorFromHEX(0xFF5555);
+	return color;
 #else
 	return charge_state.is_charging ? GColorWhite : GColorDarkGray;
 #endif
